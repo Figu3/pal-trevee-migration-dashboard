@@ -180,6 +180,9 @@ async function refreshData() {
             updateMigrationRate(rate);
         }
 
+        // Fetch Trevee metrics
+        await refreshTreveeMetrics();
+
     } catch (error) {
         console.error('Error refreshing data:', error);
         showError('Failed to refresh data. Make sure the API server is running.');
@@ -400,4 +403,109 @@ function formatTimestamp(timestamp) {
 // Helper: Show error message
 function showError(message) {
     alert(message);
+}
+
+// ============================================================================
+// TREVEE MULTI-CHAIN METRICS
+// ============================================================================
+
+async function refreshTreveeMetrics() {
+    try {
+        const treveeData = await fetchAPI('/trevee/metrics');
+
+        if (!treveeData) {
+            console.log('Trevee metrics not available');
+            return;
+        }
+
+        updateTreveeStakingCards(treveeData.staking_stats);
+        updateTreveeChainBreakdown(treveeData.tvl_by_chain, treveeData.enabled_chains);
+
+    } catch (error) {
+        console.error('Error fetching Trevee metrics:', error);
+        // Don't show error to user - these are optional metrics
+    }
+}
+
+function updateTreveeStakingCards(stakingStats) {
+    if (!stakingStats) return;
+
+    // Update staked amount
+    document.getElementById('treveeStakedAmount').textContent =
+        formatNumber(stakingStats.total_staked, 0) + ' TREVEE';
+
+    // Update staking percentage
+    document.getElementById('treveeStakingPercentage').textContent =
+        formatNumber(stakingStats.staking_percentage, 2) + '%';
+}
+
+function updateTreveeChainBreakdown(tvlData, enabledChains) {
+    if (!tvlData || !enabledChains) return;
+
+    // Update active chains count
+    document.getElementById('treveeActiveChains').textContent = enabledChains.length;
+
+    // Update chain names
+    const chainNames = enabledChains
+        .map(chain => tvlData[chain]?.name || chain)
+        .join(', ');
+    document.getElementById('treveeChainNames').textContent = chainNames;
+
+    // Build chain grid
+    const chainGrid = document.getElementById('chainGrid');
+    chainGrid.innerHTML = '';
+
+    enabledChains.forEach(chainKey => {
+        const chainData = tvlData[chainKey];
+        if (!chainData) return;
+
+        const chainItem = document.createElement('div');
+        chainItem.className = 'chain-item';
+
+        const chainEmojis = {
+            'sonic': '⚡',
+            'plasma': '🔷',
+            'ethereum': '💎'
+        };
+
+        chainItem.innerHTML = `
+            <div class="chain-name">
+                <span>${chainEmojis[chainKey] || '⛓️'}</span>
+                <span>${chainData.name}</span>
+            </div>
+            <div class="chain-stat">
+                <span class="chain-stat-label">Total Supply:</span>
+                <span class="chain-stat-value">
+                    ${chainData.total_supply ? formatNumber(chainData.total_supply, 0) + ' TREVEE' : 'Not configured'}
+                </span>
+            </div>
+            <div class="chain-stat">
+                <span class="chain-stat-label">Staked Amount:</span>
+                <span class="chain-stat-value">
+                    ${chainData.staked_amount ? formatNumber(chainData.staked_amount, 0) + ' TREVEE' : 'Not configured'}
+                </span>
+            </div>
+            <div class="chain-stat">
+                <span class="chain-stat-label">Holders:</span>
+                <span class="chain-stat-value">
+                    ${chainData.holder_count ? formatNumber(chainData.holder_count, 0) : 'Coming soon'}
+                </span>
+            </div>
+            <div class="chain-stat">
+                <span class="chain-stat-label">Explorer:</span>
+                <span class="chain-stat-value">
+                    <a href="${chainData.explorer}" target="_blank" style="color: var(--accent-primary); text-decoration: none;">
+                        View →
+                    </a>
+                </span>
+            </div>
+        `;
+
+        chainGrid.appendChild(chainItem);
+    });
+
+    // If no chains configured
+    if (enabledChains.length === 0) {
+        chainGrid.innerHTML = '<div class="loading">No chains configured yet. Update config.py with Trevee token addresses.</div>';
+    }
 }

@@ -203,6 +203,123 @@ body {
     font-weight: 600;
 }
 
+/* Trevee Multi-Chain Metrics Section */
+.trevee-metrics-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 30px;
+}
+
+.trevee-metrics-section h2 {
+    font-size: 1.4em;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.trevee-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.trevee-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.trevee-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent-secondary);
+    box-shadow: 0 8px 24px rgba(123, 97, 255, 0.15);
+}
+
+.trevee-card-header h3 {
+    font-size: 0.95em;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.trevee-card-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: var(--accent-primary);
+    margin-bottom: 8px;
+}
+
+.trevee-card-sub {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.trevee-chain-breakdown {
+    margin-top: 24px;
+}
+
+.trevee-chain-breakdown h3 {
+    font-size: 1.1em;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.chain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+}
+
+.chain-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 16px;
+    transition: all 0.3s ease;
+}
+
+.chain-item:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.1);
+}
+
+.chain-name {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--accent-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chain-stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.chain-stat:last-child {
+    border-bottom: none;
+}
+
+.chain-stat-label {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.chain-stat-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 /* Charts Section */
 .charts-section {
     display: grid;

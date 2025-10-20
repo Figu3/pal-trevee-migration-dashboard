@@ -10,6 +10,7 @@ import os
 
 from database import MigrationDatabase
 from data_processor import MigrationDataProcessor
+from trevee_metrics import TreveeMetricsTracker
 from config import LARGE_MIGRATION_THRESHOLD
 
 app = Flask(__name__)
@@ -18,6 +19,7 @@ CORS(app)  # Enable CORS for frontend
 # Initialize database and processor
 db = MigrationDatabase()
 processor = MigrationDataProcessor(db)
+trevee_tracker = TreveeMetricsTracker()
 
 
 @app.route("/api/health", methods=["GET"])
@@ -155,6 +157,36 @@ def get_sync_status():
             "last_synced_block": last_block,
             "last_update": datetime.now().isoformat()
         })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/trevee/metrics", methods=["GET"])
+def get_trevee_metrics():
+    """Get all Trevee multi-chain metrics"""
+    try:
+        metrics = trevee_tracker.get_all_metrics()
+        return jsonify(metrics)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/trevee/tvl", methods=["GET"])
+def get_trevee_tvl():
+    """Get TVL breakdown by chain"""
+    try:
+        tvl_data = trevee_tracker.get_tvl_by_chain()
+        return jsonify(tvl_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/trevee/staking", methods=["GET"])
+def get_trevee_staking():
+    """Get staking statistics"""
+    try:
+        staking_stats = trevee_tracker.get_total_staking_percentage()
+        return jsonify(staking_stats)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

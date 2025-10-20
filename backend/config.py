@@ -41,3 +41,44 @@ KNOWN_ADDRESSES = {
     # Add known addresses here for display purposes
     # "0x1234...": "Paladin Treasury",
 }
+
+# ============================================================================
+# TREVEE MULTI-CHAIN CONFIGURATION
+# ============================================================================
+
+# Trevee Token Addresses by Chain
+TREVEE_CHAINS = {
+    "sonic": {
+        "name": "Sonic",
+        "chain_id": 146,
+        "rpc_url": "https://rpc.soniclabs.com",
+        "explorer": "https://sonicscan.org",
+        "trevee_token": "0x0000000000000000000000000000000000000000",  # TODO: Add Trevee token address
+        "staking_contract": "0x0000000000000000000000000000000000000000",  # TODO: Add staking contract
+        "enabled": True
+    },
+    "plasma": {
+        "name": "Plasma",
+        "chain_id": 9745,  # Plasma chain ID
+        "rpc_url": "https://rpc.plasmachain.io",  # TODO: Verify correct RPC
+        "explorer": "https://plasmascan.to",
+        "trevee_token": "0x0000000000000000000000000000000000000000",  # TODO: Add Trevee token address
+        "staking_contract": "0x0000000000000000000000000000000000000000",  # TODO: Add staking contract
+        "enabled": True
+    },
+    "ethereum": {
+        "name": "Ethereum",
+        "chain_id": 1,
+        "rpc_url": "https://eth.llamarpc.com",
+        "explorer": "https://etherscan.io",
+        "trevee_token": "0x0000000000000000000000000000000000000000",  # TODO: Add Trevee token address
+        "staking_contract": "0x0000000000000000000000000000000000000000",  # TODO: Add staking contract
+        "enabled": False  # Set to True if deployed on Ethereum
+    }
+}
+
+# Trevee Total Supply (for staking percentage calculation)
+TREVEE_TOTAL_SUPPLY = 1000000000  # TODO: Update with actual total supply
+
+# Update intervals for Trevee metrics
+TREVEE_METRICS_REFRESH_INTERVAL = 300  # seconds (5 minutes)

@@ -80,6 +80,39 @@
             </div>
         </section>
 
+        <!-- Trevee Multi-Chain Metrics -->
+        <section class="trevee-metrics-section">
+            <h2>🌐 Trevee Multi-Chain Overview</h2>
+
+            <div class="trevee-cards">
+                <div class="trevee-card">
+                    <div class="trevee-card-header">
+                        <h3>💎 Total Staked</h3>
+                    </div>
+                    <div class="trevee-card-value" id="treveeStakedAmount">--</div>
+                    <div class="trevee-card-sub">
+                        <span id="treveeStakingPercentage">--%</span> of total supply
+                    </div>
+                </div>
+
+                <div class="trevee-card">
+                    <div class="trevee-card-header">
+                        <h3>⛓️ Active Chains</h3>
+                    </div>
+                    <div class="trevee-card-value" id="treveeActiveChains">--</div>
+                    <div class="trevee-card-sub" id="treveeChainNames">Loading...</div>
+                </div>
+            </div>
+
+            <div class="trevee-chain-breakdown">
+                <h3>TVL & Holders by Chain</h3>
+                <div class="chain-grid" id="chainGrid">
+                    <!-- Will be populated dynamically -->
+                    <div class="loading">Loading Trevee metrics...</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Charts Section -->
         <section class="charts-section">
             <!-- Cumulative Migration Chart -->
