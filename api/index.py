@@ -17,19 +17,26 @@ try:
         lookup_address, get_large_migrations, get_last_synced_block
     )
     USE_POSTGRES = True
+    DB_ERROR = None
 except Exception as e:
     print(f"Postgres not available: {e}")
+    import traceback
+    traceback.print_exc()
     USE_POSTGRES = False
+    DB_ERROR = str(e)
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
-    return jsonify({
+    response = {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "database": "postgres" if USE_POSTGRES else "none",
         "postgres_url_set": bool(os.environ.get('POSTGRES_URL'))
-    })
+    }
+    if not USE_POSTGRES and DB_ERROR:
+        response["db_error"] = DB_ERROR
+    return jsonify(response)
 
 @app.route("/api/metrics", methods=["GET"])
 def get_metrics():
