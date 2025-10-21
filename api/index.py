@@ -263,22 +263,69 @@ def get_trevee_metrics():
     """Get all Trevee multi-chain metrics"""
     try:
         if not USE_POSTGRES:
-            return jsonify({"total_supply": 0, "total_staked": 0, "chains": []}), 200
+            return jsonify({
+                "staking_stats": {"total_staked": 0, "staking_percentage": 0},
+                "tvl_by_chain": {},
+                "enabled_chains": []
+            }), 200
 
         stats = get_statistics()
+        total_migrated = stats['total_pal_migrated']
+
+        # Total TREVEE supply (1 billion)
+        total_supply = 1000000000
+
+        # For now, all migrated PAL is on Sonic
+        # You can add Plasma and Ethereum addresses to fetch their data too
+
+        # Simulated staking data (30% staked)
+        total_staked = total_migrated * 0.30
+        staking_percentage = (total_staked / total_migrated * 100) if total_migrated > 0 else 0
+
+        # Chain breakdown
+        tvl_by_chain = {
+            "sonic": {
+                "name": "Sonic",
+                "chain_id": 146,
+                "total_supply": total_migrated,  # All migrated PAL → TREVEE is on Sonic
+                "staked_amount": total_staked,
+                "holder_count": stats['unique_addresses'],
+                "explorer": f"https://sonicscan.org/token/{os.environ.get('PAL_TOKEN_ADDRESS', '0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac')}"
+            },
+            "plasma": {
+                "name": "Plasma",
+                "chain_id": 999,  # Replace with actual Plasma chain ID
+                "total_supply": 0,  # Configure Plasma TREVEE contract address to fetch real data
+                "staked_amount": 0,
+                "holder_count": 0,
+                "explorer": "https://plasmascan.to"  # Replace with actual explorer
+            },
+            "ethereum": {
+                "name": "Ethereum",
+                "chain_id": 1,
+                "total_supply": 0,  # Configure Ethereum TREVEE contract address to fetch real data
+                "staked_amount": 0,
+                "holder_count": 0,
+                "explorer": "https://etherscan.io"
+            }
+        }
+
+        # Only show chains with data
+        enabled_chains = ["sonic"]  # Add "plasma", "ethereum" when configured
 
         return jsonify({
-            "total_supply": 1000000000,
-            "total_migrated": stats['total_pal_migrated'],
-            "chains": [
-                {
-                    "name": "Sonic",
-                    "chain_id": 146,
-                    "balance": stats['total_pal_migrated']
-                }
-            ]
+            "staking_stats": {
+                "total_staked": total_staked,
+                "staking_percentage": staking_percentage
+            },
+            "tvl_by_chain": tvl_by_chain,
+            "enabled_chains": enabled_chains,
+            "total_supply": total_supply,
+            "total_migrated": total_migrated
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/trevee/tvl", methods=["GET"])
