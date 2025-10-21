@@ -44,23 +44,78 @@ def health_check():
 
 @app.route("/api/metrics", methods=["GET"])
 def get_metrics():
-    """Get all migration metrics"""
+    """Get all migration metrics in frontend-compatible format"""
     try:
         if not USE_POSTGRES:
             return jsonify({"error": "Database not configured"}), 500
 
         stats = get_statistics()
+        daily = get_daily_stats()
+
+        # Calculate cumulative data
+        cumulative_data = []
+        cumulative_pal = 0
+        for day in daily:
+            cumulative_pal += day['amount']
+            cumulative_data.append({
+                "date": day['date'],
+                "cumulative_pal": cumulative_pal
+            })
+
+        # Create distribution buckets
+        distribution_labels = ['0-1K', '1K-10K', '10K-100K', '100K+']
+        distribution_counts = [0, 0, 0, 0]
+
+        from db import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT amount_pal FROM migrations")
+        amounts = cursor.fetchall()
+
+        for row in amounts:
+            amount = float(row['amount_pal'])
+            if amount < 1000:
+                distribution_counts[0] += 1
+            elif amount < 10000:
+                distribution_counts[1] += 1
+            elif amount < 100000:
+                distribution_counts[2] += 1
+            else:
+                distribution_counts[3] += 1
+
+        cursor.close()
+        conn.close()
 
         return jsonify({
-            "total_migrators": stats['unique_addresses'],
-            "total_pal_migrated": stats['total_pal_migrated'],
-            "average_migration": stats['average_migration'],
-            "median_migration": stats['median_migration'],
-            "largest_migration": stats['top_migrations'][0]['amount_pal'] if stats['top_migrations'] else 0,
-            "total_migrations": stats['total_migrations'],
+            "summary": {
+                "total_unique_addresses": stats['unique_addresses'],
+                "total_pal_migrated": stats['total_pal_migrated'],
+                "total_migrations": stats['total_migrations'],
+                "average_migration_size": stats['average_migration'],
+                "median_migration_size": stats['median_migration']
+            },
+            "cumulative_data": cumulative_data,
+            "daily_stats": [{
+                "date": d['date'],
+                "total_pal": d['amount'],
+                "count": d['count']
+            } for d in daily],
+            "distribution": {
+                "labels": distribution_labels,
+                "counts": distribution_counts
+            },
+            "source_breakdown": {
+                "sonic": {"pal": stats['total_pal_migrated'], "count": stats['total_migrations']},
+                "ethereum": {"pal": 0, "count": 0},
+                "unknown": {"pal": 0, "count": 0}
+            },
+            "top_migrations": stats['top_migrations'],
             "last_updated": datetime.now().isoformat()
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/statistics", methods=["GET"])
@@ -91,7 +146,7 @@ def get_migration_rate():
     """Get migration rate for specified period"""
     try:
         if not USE_POSTGRES:
-            return jsonify({"rate": 0, "period_days": 7}), 200
+            return jsonify({"daily_average_migrations": 0, "daily_average_pal": 0}), 200
 
         days = request.args.get("days", 7, type=int)
         daily_stats = get_daily_stats()
@@ -99,12 +154,14 @@ def get_migration_rate():
         cutoff = (datetime.now() - timedelta(days=days)).date()
         recent = [s for s in daily_stats if datetime.fromisoformat(s['date']).date() > cutoff]
 
-        total_in_period = sum(s['count'] for s in recent)
+        total_migrations = sum(s['count'] for s in recent)
+        total_pal = sum(s['amount'] for s in recent)
 
         return jsonify({
-            "rate": total_in_period / days if days > 0 else 0,
+            "daily_average_migrations": total_migrations / days if days > 0 else 0,
+            "daily_average_pal": total_pal / days if days > 0 else 0,
             "period_days": days,
-            "total_in_period": total_in_period
+            "total_in_period": total_migrations
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -126,9 +183,17 @@ def lookup_address_endpoint(address):
     """Look up migrations for a specific address"""
     try:
         if not USE_POSTGRES:
-            return jsonify({"address": address, "migrations": [], "total_amount": 0}), 200
+            return jsonify({"found": False, "address": address}), 200
 
-        return jsonify(lookup_address(address))
+        result = lookup_address(address)
+
+        return jsonify({
+            "found": result['count'] > 0,
+            "address": address,
+            "migration_count": result['count'],
+            "total_pal_migrated": result['total_amount'],
+            "migrations": result['migrations']
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
