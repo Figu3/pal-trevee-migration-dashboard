@@ -2,10 +2,14 @@
 """
 Vercel serverless function with Postgres backend
 """
+import sys
+import os
+# Add current directory to Python path for Vercel
+sys.path.insert(0, os.path.dirname(__file__))
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
-import os
 
 app = Flask(__name__)
 CORS(app)
