@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAL → TREVEE Migration Dashboard | Sonic Blockchain</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>PAL → TREVEE Migration Dashboard</h1>
+                <p class="subtitle">Real-time tracking on Sonic Blockchain (Chain ID: 146)</p>
+            </div>
+            <div class="header-actions">
+                <div class="last-update">
+                    Last Updated: <span id="lastUpdate">--</span>
+                </div>
+                <button class="btn btn-primary" onclick="refreshData()">
+                    <span id="refreshIcon">⟳</span> Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Summary Cards -->
+        <section class="summary-cards">
+            <div class="card">
+                <div class="card-icon">👥</div>
+                <div class="card-content">
+                    <h3>Unique Migrators</h3>
+                    <div class="card-value" id="uniqueAddresses">--</div>
+                    <div class="card-change" id="uniqueAddressesChange"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">💰</div>
+                <div class="card-content">
+                    <h3>Total PAL Migrated</h3>
+                    <div class="card-value" id="totalPAL">--</div>
+                    <div class="card-change" id="totalPALChange"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">📊</div>
+                <div class="card-content">
+                    <h3>Total Migrations</h3>
+                    <div class="card-value" id="totalMigrations">--</div>
+                    <div class="card-change" id="totalMigrationsChange"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-icon">📈</div>
+                <div class="card-content">
+                    <h3>Average Migration</h3>
+                    <div class="card-value" id="avgMigration">--</div>
+                    <div class="card-sub" id="medianMigration">Median: --</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Migration Rate -->
+        <section class="info-bar">
+            <div class="info-item">
+                <strong>7-Day Average:</strong>
+                <span id="dailyAvgMigrations">-- migrations/day</span>
+            </div>
+            <div class="info-item">
+                <strong>7-Day PAL Rate:</strong>
+                <span id="dailyAvgPAL">-- PAL/day</span>
+            </div>
+            <div class="info-item">
+                <strong>Migration Deadline:</strong>
+                <span id="deadline">Checking...</span>
+            </div>
+        </section>
+
+        <!-- Trevee Multi-Chain Metrics -->
+        <section class="trevee-metrics-section">
+            <h2>🌐 Trevee Multi-Chain Overview</h2>
+
+            <div class="trevee-cards">
+                <div class="trevee-card">
+                    <div class="trevee-card-header">
+                        <h3>💎 Total Staked</h3>
+                    </div>
+                    <div class="trevee-card-value" id="treveeStakedAmount">--</div>
+                    <div class="trevee-card-sub">
+                        <span id="treveeStakingPercentage">--%</span> of total supply
+                    </div>
+                </div>
+
+                <div class="trevee-card">
+                    <div class="trevee-card-header">
+                        <h3>⛓️ Active Chains</h3>
+                    </div>
+                    <div class="trevee-card-value" id="treveeActiveChains">--</div>
+                    <div class="trevee-card-sub" id="treveeChainNames">Loading...</div>
+                </div>
+            </div>
+
+            <div class="trevee-chain-breakdown">
+                <h3>TVL & Holders by Chain</h3>
+                <div class="chain-grid" id="chainGrid">
+                    <!-- Will be populated dynamically -->
+                    <div class="loading">Loading Trevee metrics...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Section -->
+        <section class="charts-section">
+            <!-- Cumulative Migration Chart -->
+            <div class="chart-container">
+                <h2>Cumulative PAL Migrated Over Time</h2>
+                <canvas id="cumulativeChart"></canvas>
+            </div>
+
+            <!-- Daily Migration Chart -->
+            <div class="chart-container">
+                <h2>Daily Migration Volume</h2>
+                <canvas id="dailyChart"></canvas>
+            </div>
+
+            <!-- Distribution Histogram -->
+            <div class="chart-container">
+                <h2>Migration Size Distribution</h2>
+                <canvas id="distributionChart"></canvas>
+            </div>
+
+            <!-- Source Breakdown Pie Chart -->
+            <div class="chart-container">
+                <h2>Migration Source (Sonic vs Ethereum)</h2>
+                <canvas id="sourceChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Top Migrations Table -->
+        <section class="table-section">
+            <h2>Top 10 Largest Migrations</h2>
+            <div class="table-wrapper">
+                <table id="topMigrationsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Address</th>
+                            <th>Amount (PAL)</th>
+                            <th>Transaction</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="topMigrationsBody">
+                        <tr><td colspan="5" class="loading">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Address Lookup -->
+        <section class="lookup-section">
+            <h2>Address Lookup</h2>
+            <div class="lookup-form">
+                <input
+                    type="text"
+                    id="addressInput"
+                    placeholder="Enter address (0x...)"
+                    class="input-field"
+                />
+                <button class="btn btn-primary" onclick="lookupAddress()">Search</button>
+            </div>
+            <div id="lookupResult" class="lookup-result"></div>
+        </section>
+
+        <!-- Export Section -->
+        <section class="export-section">
+            <h2>Export Data</h2>
+            <div class="export-buttons">
+                <button class="btn btn-secondary" onclick="exportCSV()">
+                    📄 Download CSV
+                </button>
+                <button class="btn btn-secondary" onclick="exportJSON()">
+                    📋 Download JSON
+                </button>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>
+                    <strong>Contract Addresses:</strong><br>
+                    PAL Token: <code>0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac</code><br>
+                    Migration Contract: <code>0x99fe40e501151e92f10ac13ea1c06083ee170363</code>
+                </p>
+                <p>
+                    <strong>Block Explorer:</strong>
+                    <a href="https://sonicscan.org" target="_blank">Sonicscan.org</a>
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
