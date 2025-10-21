@@ -355,9 +355,11 @@ Built with:
 - Python 3.8+
 - Flask (REST API)
 - Chart.js (Visualizations)
-- SQLite (Data storage)
+- Postgres (Data storage via Prisma)
 - Sonic blockchain RPC
 
 ---
 
 **Disclaimer**: This dashboard is for informational purposes only. Always verify data directly on the blockchain explorer.
+
+*Last updated: 2025-01-21*
