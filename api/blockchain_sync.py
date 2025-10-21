@@ -9,19 +9,24 @@ from db import insert_migrations, update_sync_metadata, get_last_synced_block
 
 # Configuration
 SONIC_RPC_URL = os.environ.get('SONIC_RPC_URL', 'https://rpc.soniclabs.com')
-PAL_TOKEN_ADDRESS = os.environ.get('PAL_TOKEN_ADDRESS', '0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac')
-MIGRATION_CONTRACT = os.environ.get('MIGRATION_CONTRACT_ADDRESS', '0x99fe40e501151e92f10ac13ea1c06083ee170363')
+PAL_TOKEN_ADDRESS = Web3.to_checksum_address(os.environ.get('PAL_TOKEN_ADDRESS', '0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac'))
+MIGRATION_CONTRACT = Web3.to_checksum_address(os.environ.get('MIGRATION_CONTRACT_ADDRESS', '0x99fe40e501151e92f10ac13ea1c06083ee170363'))
 
-# ERC20 Transfer event signature
-TRANSFER_EVENT_SIGNATURE = Web3.keccak(text='Transfer(address,address,uint256)').hex()
+# Migration event signatures (from analyzing actual transactions)
+MIGRATION_EVENT_1 = '0xc38977ae45aaee7a70eedc8ae085f4931e040352f48f62a1bb9d1712abad1c24'
+MIGRATION_EVENT_2 = '0x877c1d3e63eecac7ca6a72be1dc0076327918516b7be8192d2da3cb32f201670'
 
 def sync_migrations(start_block=None, end_block=None):
     """Sync migration data from blockchain"""
     print("Connecting to Sonic RPC...")
     w3 = Web3(Web3.HTTPProvider(SONIC_RPC_URL))
 
-    if not w3.is_connected():
-        raise Exception("Failed to connect to Sonic RPC")
+    try:
+        # Test connection
+        w3.eth.block_number
+        print("Connected successfully!")
+    except Exception as e:
+        raise Exception(f"Failed to connect to Sonic RPC: {e}")
 
     print(f"Connected! Chain ID: {w3.eth.chain_id}")
 
@@ -51,26 +56,23 @@ def sync_migrations(start_block=None, end_block=None):
         print(f"Fetching blocks {batch_start} to {batch_end}...")
 
         try:
-            # Get Transfer events where 'to' is the migration contract
+            # Get migration events from the migration contract
             filter_params = {
                 'fromBlock': batch_start,
                 'toBlock': batch_end,
-                'address': PAL_TOKEN_ADDRESS,
-                'topics': [
-                    TRANSFER_EVENT_SIGNATURE,
-                    None,  # from (any address)
-                    '0x' + MIGRATION_CONTRACT[2:].lower().zfill(64)  # to (migration contract)
-                ]
+                'address': MIGRATION_CONTRACT,
+                'topics': [[MIGRATION_EVENT_1, MIGRATION_EVENT_2]]  # Either event type
             }
 
             logs = w3.eth.get_logs(filter_params)
             print(f"Found {len(logs)} migration events")
 
             for log in logs:
-                # Decode event
+                # Decode event - topics[1] is the migrator address
                 from_address = '0x' + log['topics'][1].hex()[26:]
-                to_address = '0x' + log['topics'][2].hex()[26:]
-                amount_wei = int(log['data'].hex(), 16)
+
+                # Amount is in the data field (first 32 bytes)
+                amount_wei = int(log['data'].hex()[:66], 16)
                 amount_pal = amount_wei / 10**18
 
                 # Get block timestamp
@@ -80,13 +82,13 @@ def sync_migrations(start_block=None, end_block=None):
                 migration = {
                     'tx_hash': log['transactionHash'].hex(),
                     'from_address': from_address,
-                    'to_address': to_address,
+                    'to_address': MIGRATION_CONTRACT,
                     'amount_pal': amount_pal,
                     'block_number': log['blockNumber'],
                     'block_timestamp': block['timestamp'],
                     'timestamp': timestamp,
                     'log_index': log['logIndex'],
-                    'source': 'sonic'  # Detect if bridged from Ethereum in future
+                    'source': 'sonic'
                 }
 
                 all_migrations.append(migration)
