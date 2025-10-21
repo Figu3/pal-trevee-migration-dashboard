@@ -1,6 +1,6 @@
 // PAL to TREVEE Migration Dashboard JavaScript
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = '/api';
 const REFRESH_INTERVAL = 300000; // 5 minutes in milliseconds
 
 // Global chart instances
