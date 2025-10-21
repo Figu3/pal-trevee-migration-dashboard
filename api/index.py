@@ -1,64 +1,25 @@
 #!/usr/bin/env python3
 """
-Vercel serverless function entry point with demo data
+Vercel serverless function with Postgres backend
 """
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
-import random
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Generate demo data
-def generate_demo_migrations(count=100):
-    """Generate demo migration data"""
-    migrations = []
-    base_time = datetime.now() - timedelta(days=30)
-
-    for i in range(count):
-        amount_pal = random.lognormvariate(8, 2)
-        timestamp = base_time + timedelta(
-            days=random.randint(0, 30),
-            hours=random.randint(0, 23)
-        )
-
-        migrations.append({
-            "tx_hash": f"0x{''.join(random.choices('0123456789abcdef', k=64))}",
-            "from_address": f"0x{''.join(random.choices('0123456789abcdef', k=40))}",
-            "amount_pal": amount_pal,
-            "timestamp": timestamp.isoformat(),
-            "block_number": 49997769 + i * 100,
-            "source": random.choice(['sonic', 'ethereum'])
-        })
-
-    return sorted(migrations, key=lambda x: x['timestamp'])
-
-# Generate demo data on module load
-MIGRATIONS = generate_demo_migrations(100)
-
-def calculate_metrics():
-    """Calculate metrics from migrations"""
-    if not MIGRATIONS:
-        return {
-            "total_migrators": 0,
-            "total_pal_migrated": 0,
-            "average_migration": 0,
-            "median_migration": 0,
-            "largest_migration": 0
-        }
-
-    amounts = [m['amount_pal'] for m in MIGRATIONS]
-    unique_addresses = len(set(m['from_address'] for m in MIGRATIONS))
-
-    return {
-        "total_migrators": unique_addresses,
-        "total_pal_migrated": sum(amounts),
-        "average_migration": sum(amounts) / len(amounts),
-        "median_migration": sorted(amounts)[len(amounts) // 2],
-        "largest_migration": max(amounts),
-        "total_migrations": len(MIGRATIONS)
-    }
+# Import database functions
+try:
+    from db import (
+        get_statistics, get_daily_stats, get_timeline,
+        lookup_address, get_large_migrations, get_last_synced_block
+    )
+    USE_POSTGRES = True
+except Exception as e:
+    print(f"Postgres not available: {e}")
+    USE_POSTGRES = False
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
@@ -66,169 +27,249 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "mode": "demo"
+        "database": "postgres" if USE_POSTGRES else "none",
+        "postgres_url_set": bool(os.environ.get('POSTGRES_URL'))
     })
 
 @app.route("/api/metrics", methods=["GET"])
 def get_metrics():
     """Get all migration metrics"""
-    metrics = calculate_metrics()
-    return jsonify({
-        **metrics,
-        "last_updated": datetime.now().isoformat(),
-        "mode": "demo_data"
-    })
+    try:
+        if not USE_POSTGRES:
+            return jsonify({"error": "Database not configured"}), 500
+
+        stats = get_statistics()
+
+        return jsonify({
+            "total_migrators": stats['unique_addresses'],
+            "total_pal_migrated": stats['total_pal_migrated'],
+            "average_migration": stats['average_migration'],
+            "median_migration": stats['median_migration'],
+            "largest_migration": stats['top_migrations'][0]['amount_pal'] if stats['top_migrations'] else 0,
+            "total_migrations": stats['total_migrations'],
+            "last_updated": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/statistics", methods=["GET"])
-def get_statistics():
+def get_statistics_endpoint():
     """Get summary statistics"""
-    metrics = calculate_metrics()
+    try:
+        if not USE_POSTGRES:
+            return jsonify({"error": "Database not configured"}), 500
 
-    return jsonify({
-        "total_migrations": metrics['total_migrations'],
-        "total_amount": metrics['total_pal_migrated'],
-        "unique_addresses": metrics['total_migrators'],
-        "first_migration": MIGRATIONS[0]['timestamp'] if MIGRATIONS else None,
-        "last_migration": MIGRATIONS[-1]['timestamp'] if MIGRATIONS else None,
-        "top_migrations": sorted(MIGRATIONS, key=lambda x: x['amount_pal'], reverse=True)[:10]
-    })
+        stats = get_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/daily-stats", methods=["GET"])
-def get_daily_stats():
+def get_daily_stats_endpoint():
     """Get daily migration statistics"""
-    from collections import defaultdict
+    try:
+        if not USE_POSTGRES:
+            return jsonify([]), 200
 
-    daily = defaultdict(lambda: {"count": 0, "amount": 0})
-
-    for m in MIGRATIONS:
-        date = m['timestamp'][:10]
-        daily[date]["count"] += 1
-        daily[date]["amount"] += m['amount_pal']
-
-    return jsonify([
-        {"date": date, **stats}
-        for date, stats in sorted(daily.items())
-    ])
+        return jsonify(get_daily_stats())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/migration-rate", methods=["GET"])
 def get_migration_rate():
     """Get migration rate for specified period"""
-    days = request.args.get("days", 7, type=int)
-    cutoff = datetime.now() - timedelta(days=days)
+    try:
+        if not USE_POSTGRES:
+            return jsonify({"rate": 0, "period_days": 7}), 200
 
-    recent = [m for m in MIGRATIONS if datetime.fromisoformat(m['timestamp']) > cutoff]
+        days = request.args.get("days", 7, type=int)
+        daily_stats = get_daily_stats()
 
-    return jsonify({
-        "rate": len(recent) / days if days > 0 else 0,
-        "period_days": days,
-        "total_in_period": len(recent)
-    })
+        cutoff = (datetime.now() - timedelta(days=days)).date()
+        recent = [s for s in daily_stats if datetime.fromisoformat(s['date']).date() > cutoff]
+
+        total_in_period = sum(s['count'] for s in recent)
+
+        return jsonify({
+            "rate": total_in_period / days if days > 0 else 0,
+            "period_days": days,
+            "total_in_period": total_in_period
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/timeline", methods=["GET"])
-def get_timeline():
+def get_timeline_endpoint():
     """Get complete migration timeline"""
-    return jsonify(MIGRATIONS[:50])  # Return first 50 for performance
+    try:
+        if not USE_POSTGRES:
+            return jsonify([]), 200
+
+        limit = request.args.get("limit", 50, type=int)
+        return jsonify(get_timeline(limit))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/address/<address>", methods=["GET"])
-def lookup_address(address):
+def lookup_address_endpoint(address):
     """Look up migrations for a specific address"""
-    matches = [m for m in MIGRATIONS if m['from_address'].lower() == address.lower()]
+    try:
+        if not USE_POSTGRES:
+            return jsonify({"address": address, "migrations": [], "total_amount": 0}), 200
 
-    return jsonify({
-        "address": address,
-        "migrations": matches,
-        "total_amount": sum(m['amount_pal'] for m in matches),
-        "count": len(matches)
-    })
+        return jsonify(lookup_address(address))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/large-migrations", methods=["GET"])
-def get_large_migrations():
+def get_large_migrations_endpoint():
     """Get migrations above threshold"""
-    threshold = request.args.get("threshold", 100000, type=float)
-    large = [m for m in MIGRATIONS if m['amount_pal'] > threshold]
+    try:
+        if not USE_POSTGRES:
+            return jsonify([]), 200
 
-    return jsonify(sorted(large, key=lambda x: x['amount_pal'], reverse=True))
+        threshold = request.args.get("threshold", 100000, type=float)
+        return jsonify(get_large_migrations(threshold))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/percentiles", methods=["GET"])
 def get_percentiles():
     """Get percentile distribution"""
-    amounts = sorted([m['amount_pal'] for m in MIGRATIONS])
+    try:
+        if not USE_POSTGRES:
+            return jsonify({}), 200
 
-    if not amounts:
-        return jsonify({})
+        from db import get_db_connection
 
-    percentiles = {}
-    for p in [10, 25, 50, 75, 90, 95, 99]:
-        idx = int(len(amounts) * p / 100)
-        percentiles[f"p{p}"] = amounts[min(idx, len(amounts)-1)]
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    return jsonify(percentiles)
+        percentiles = {}
+        for p in [10, 25, 50, 75, 90, 95, 99]:
+            cursor.execute(f"""
+                SELECT PERCENTILE_CONT({p/100.0}) WITHIN GROUP (ORDER BY amount_pal) as p{p}
+                FROM migrations
+            """)
+            result = cursor.fetchone()
+            percentiles[f"p{p}"] = float(result[f'p{p}']) if result and result[f'p{p}'] else 0
+
+        cursor.close()
+        conn.close()
+
+        return jsonify(percentiles)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/sync-status", methods=["GET"])
 def get_sync_status():
     """Get synchronization status"""
-    return jsonify({
-        "last_synced_block": MIGRATIONS[-1]['block_number'] if MIGRATIONS else 0,
-        "last_update": datetime.now().isoformat(),
-        "status": "Demo mode - using generated data"
-    })
+    try:
+        if not USE_POSTGRES:
+            return jsonify({
+                "last_synced_block": 0,
+                "last_update": datetime.now().isoformat(),
+                "status": "Database not configured"
+            }), 200
+
+        last_block = get_last_synced_block()
+
+        return jsonify({
+            "last_synced_block": last_block,
+            "last_update": datetime.now().isoformat(),
+            "status": "synced" if last_block > 0 else "not_synced"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/trevee/metrics", methods=["GET"])
 def get_trevee_metrics():
     """Get all Trevee multi-chain metrics"""
-    metrics = calculate_metrics()
+    try:
+        if not USE_POSTGRES:
+            return jsonify({"total_supply": 0, "total_staked": 0, "chains": []}), 200
 
-    return jsonify({
-        "total_supply": 1000000000,
-        "total_migrated": metrics['total_pal_migrated'],
-        "chains": [
-            {
-                "name": "Sonic",
-                "chain_id": 146,
-                "balance": metrics['total_pal_migrated'] * 0.6
-            },
-            {
-                "name": "Ethereum",
-                "chain_id": 1,
-                "balance": metrics['total_pal_migrated'] * 0.4
-            }
-        ]
-    })
+        stats = get_statistics()
+
+        return jsonify({
+            "total_supply": 1000000000,
+            "total_migrated": stats['total_pal_migrated'],
+            "chains": [
+                {
+                    "name": "Sonic",
+                    "chain_id": 146,
+                    "balance": stats['total_pal_migrated']
+                }
+            ]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/trevee/tvl", methods=["GET"])
 def get_trevee_tvl():
     """Get TVL breakdown by chain"""
-    metrics = calculate_metrics()
+    try:
+        if not USE_POSTGRES:
+            return jsonify({}), 200
 
-    return jsonify({
-        "sonic": metrics['total_pal_migrated'] * 0.6,
-        "ethereum": metrics['total_pal_migrated'] * 0.4
-    })
+        stats = get_statistics()
+
+        return jsonify({
+            "sonic": stats['total_pal_migrated']
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/trevee/staking", methods=["GET"])
 def get_trevee_staking():
     """Get staking statistics"""
-    metrics = calculate_metrics()
+    try:
+        if not USE_POSTGRES:
+            return jsonify({"total_staked": 0, "staking_percentage": 0}), 200
 
-    return jsonify({
-        "total_staked": metrics['total_pal_migrated'] * 0.3,
-        "staking_percentage": 30.0
-    })
+        stats = get_statistics()
+
+        return jsonify({
+            "total_staked": stats['total_pal_migrated'] * 0.3,
+            "staking_percentage": 30.0
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/export/json", methods=["GET"])
 def export_json():
     """Export migrations as JSON"""
-    return jsonify(MIGRATIONS)
+    try:
+        if not USE_POSTGRES:
+            return jsonify([]), 200
+
+        migrations = get_timeline(limit=10000)
+        return jsonify(migrations)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/export/csv", methods=["GET"])
 def export_csv():
     """Export migrations as CSV"""
-    import io
-    import csv
+    try:
+        if not USE_POSTGRES:
+            return "No data available", 404
 
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=['tx_hash', 'from_address', 'amount_pal', 'timestamp', 'block_number', 'source'])
-    writer.writeheader()
-    writer.writerows(MIGRATIONS)
+        import io
+        import csv
 
-    return output.getvalue(), 200, {'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=migrations.csv'}
+        migrations = get_timeline(limit=10000)
+
+        output = io.StringIO()
+        if migrations:
+            fieldnames = ['tx_hash', 'from_address', 'amount_pal', 'timestamp', 'block_number', 'source']
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(migrations)
+
+        return output.getvalue(), 200, {
+            'Content-Type': 'text/csv',
+            'Content-Disposition': 'attachment; filename=migrations.csv'
+        }
+    except Exception as e:
+        return str(e), 500
