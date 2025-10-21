@@ -7,10 +7,22 @@ from web3 import Web3
 from datetime import datetime
 from db import insert_migrations, update_sync_metadata, get_last_synced_block
 
+# Load environment variables from .env.local if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv('.env.local')
+    load_dotenv()  # Also try regular .env
+except ImportError:
+    pass  # python-dotenv not installed, rely on environment variables
+
 # Configuration
 SONIC_RPC_URL = os.environ.get('SONIC_RPC_URL', 'https://rpc.soniclabs.com')
 PAL_TOKEN_ADDRESS = Web3.to_checksum_address(os.environ.get('PAL_TOKEN_ADDRESS', '0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac'))
 MIGRATION_CONTRACT = Web3.to_checksum_address(os.environ.get('MIGRATION_CONTRACT_ADDRESS', '0x99fe40e501151e92f10ac13ea1c06083ee170363'))
+
+# Migration contract was deployed around block 51300000
+# Start from here by default to avoid scanning millions of empty blocks
+DEFAULT_START_BLOCK = 51300000
 
 # Migration event signatures (from analyzing actual transactions)
 MIGRATION_EVENT_1 = '0xc38977ae45aaee7a70eedc8ae085f4931e040352f48f62a1bb9d1712abad1c24'
@@ -37,9 +49,10 @@ def sync_migrations(start_block=None, end_block=None):
     # Determine start block
     if start_block is None:
         try:
-            start_block = get_last_synced_block() + 1
+            last_synced = get_last_synced_block()
+            start_block = last_synced + 1 if last_synced > 0 else DEFAULT_START_BLOCK
         except:
-            start_block = 0
+            start_block = DEFAULT_START_BLOCK
 
     if end_block is None:
         end_block = current_block
