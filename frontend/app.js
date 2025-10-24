@@ -509,3 +509,4 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
         chainGrid.innerHTML = '<div class="loading">No chains configured yet. Update config.py with Trevee token addresses.</div>';
     }
 }
+
