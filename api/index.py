@@ -260,68 +260,80 @@ def get_sync_status():
 
 @app.route("/api/trevee/metrics", methods=["GET"])
 def get_trevee_metrics():
-    """Get all Trevee multi-chain metrics"""
+    """Get all Trevee multi-chain metrics from blockchain"""
     try:
-        if not USE_POSTGRES:
-            return jsonify({
-                "staking_stats": {"total_staked": 0, "staking_percentage": 0},
-                "tvl_by_chain": {},
-                "enabled_chains": []
-            }), 200
+        import requests
 
-        stats = get_statistics()
-        total_migrated = stats['total_pal_migrated']
+        # TREVEE token addresses
+        TREVEE_TOKEN = "0xe90fe2de4a415ad48b6dcec08ba6ae98231948ac"
+        STAKING_CONTRACT = "0x3ba32287b008ddf3c5a38df272369931e3030152"
+        RPC_URL = "https://rpc.soniclabs.com"
 
-        # Total TREVEE supply (1 billion)
-        total_supply = 1000000000
+        # Fetch total supply from blockchain
+        def make_rpc_call(method, params):
+            try:
+                response = requests.post(RPC_URL, json={
+                    "jsonrpc": "2.0",
+                    "method": method,
+                    "params": params,
+                    "id": 1
+                }, timeout=10)
+                result = response.json()
+                return result.get("result")
+            except:
+                return None
 
-        # For now, all migrated PAL is on Sonic
-        # You can add Plasma and Ethereum addresses to fetch their data too
+        # Get total supply
+        total_supply_hex = make_rpc_call("eth_call", [
+            {"to": TREVEE_TOKEN, "data": "0x18160ddd"},
+            "latest"
+        ])
+        total_supply = int(total_supply_hex, 16) / 10**18 if total_supply_hex else 50000000
 
-        # Simulated staking data (30% staked)
-        total_staked = total_migrated * 0.30
-        staking_percentage = (total_staked / total_migrated * 100) if total_migrated > 0 else 0
+        # Get staked amount (balance of staking contract)
+        staked_hex = make_rpc_call("eth_call", [
+            {"to": TREVEE_TOKEN, "data": "0x70a08231" + STAKING_CONTRACT[2:].zfill(64)},
+            "latest"
+        ])
+        staked_amount = int(staked_hex, 16) / 10**18 if staked_hex else 0
+
+        # Calculate staking percentage
+        staking_percentage = (staked_amount / total_supply * 100) if total_supply > 0 else 0
+
+        # Get PAL migration stats for additional context
+        stats = get_statistics() if USE_POSTGRES else {"unique_addresses": 0, "total_pal_migrated": 0}
 
         # Chain breakdown
         tvl_by_chain = {
             "sonic": {
                 "name": "Sonic",
                 "chain_id": 146,
-                "total_supply": total_migrated,  # All migrated PAL → TREVEE is on Sonic
-                "staked_amount": total_staked,
-                "holder_count": stats['unique_addresses'],
-                "explorer": f"https://sonicscan.org/token/{os.environ.get('PAL_TOKEN_ADDRESS', '0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac')}"
+                "total_supply": total_supply,
+                "staked_amount": staked_amount,
+                "holder_count": stats.get('unique_addresses', 0),
+                "explorer": f"https://sonicscan.org/token/{TREVEE_TOKEN}"
             },
             "plasma": {
                 "name": "Plasma",
-                "chain_id": 999,  # Replace with actual Plasma chain ID
-                "total_supply": 0,  # Configure Plasma TREVEE contract address to fetch real data
-                "staked_amount": 0,
-                "holder_count": 0,
-                "explorer": "https://plasmascan.to"  # Replace with actual explorer
-            },
-            "ethereum": {
-                "name": "Ethereum",
-                "chain_id": 1,
-                "total_supply": 0,  # Configure Ethereum TREVEE contract address to fetch real data
-                "staked_amount": 0,
-                "holder_count": 0,
-                "explorer": "https://etherscan.io"
+                "chain_id": 9745,
+                "total_supply": None,
+                "staked_amount": None,
+                "holder_count": None,
+                "explorer": "https://plasmascan.to"
             }
         }
 
-        # Only show chains with data
-        enabled_chains = ["sonic"]  # Add "plasma", "ethereum" when configured
+        enabled_chains = ["sonic", "plasma"]
 
         return jsonify({
             "staking_stats": {
-                "total_staked": total_staked,
-                "staking_percentage": staking_percentage
+                "total_staked": staked_amount,
+                "total_supply": total_supply,
+                "staking_percentage": staking_percentage,
+                "by_chain": {"sonic": staked_amount}
             },
             "tvl_by_chain": tvl_by_chain,
-            "enabled_chains": enabled_chains,
-            "total_supply": total_supply,
-            "total_migrated": total_migrated
+            "enabled_chains": enabled_chains
         })
     except Exception as e:
         import traceback
