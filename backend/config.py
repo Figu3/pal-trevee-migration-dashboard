@@ -20,7 +20,7 @@ REFRESH_INTERVAL = 300  # seconds (5 minutes)
 LARGE_MIGRATION_THRESHOLD = 100000  # PAL tokens (for alerts)
 
 # Data Collection Settings
-START_BLOCK = 0  # Set to 0 to scan from genesis, or specific block to start from
+START_BLOCK = 52609535  # Migration contract deployment block (Oct 10, 2025)
 BATCH_SIZE = 10000  # Number of blocks to query at once
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
