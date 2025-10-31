@@ -53,8 +53,8 @@ TREVEE_CHAINS = {
         "chain_id": 146,
         "rpc_url": "https://rpc.soniclabs.com",
         "explorer": "https://sonicscan.org",
-        "trevee_token": "0x0000000000000000000000000000000000000000",  # TODO: Add Trevee token address
-        "staking_contract": "0x0000000000000000000000000000000000000000",  # TODO: Add staking contract
+        "trevee_token": "0xe90fe2de4a415ad48b6dcec08ba6ae98231948ac",  # TREVEE token address on Sonic
+        "staking_contract": "0x3ba32287b008ddf3c5a38df272369931e3030152",  # stkTRE staking contract
         "enabled": True
     },
     "plasma": {
@@ -78,7 +78,7 @@ TREVEE_CHAINS = {
 }
 
 # Trevee Total Supply (for staking percentage calculation)
-TREVEE_TOTAL_SUPPLY = 1000000000  # TODO: Update with actual total supply
+TREVEE_TOTAL_SUPPLY = 50000000  # 50 million TREVEE total supply on Sonic
 
 # Update intervals for Trevee metrics
 TREVEE_METRICS_REFRESH_INTERVAL = 300  # seconds (5 minutes)
