@@ -211,35 +211,41 @@ function updateSummaryCards(summary) {
 
 // Update all charts
 function updateCharts(metrics) {
+    console.log('Updating charts with metrics:', metrics);
+
     // Update cumulative chart
     if (metrics.cumulative_data && metrics.cumulative_data.length > 0) {
+        console.log(`Cumulative data points: ${metrics.cumulative_data.length}`);
         cumulativeChart.data.labels = metrics.cumulative_data.map(d => d.date);
         cumulativeChart.data.datasets[0].data = metrics.cumulative_data.map(d => d.cumulative_pal);
-        cumulativeChart.update();
+        cumulativeChart.update('none'); // Disable animation for immediate update
     }
 
     // Update daily chart
     if (metrics.daily_stats && metrics.daily_stats.length > 0) {
+        console.log(`Daily stats data points: ${metrics.daily_stats.length}`);
         dailyChart.data.labels = metrics.daily_stats.map(d => d.date);
         dailyChart.data.datasets[0].data = metrics.daily_stats.map(d => d.total_pal);
-        dailyChart.update();
+        dailyChart.update('none'); // Disable animation for immediate update
     }
 
     // Update distribution chart
     if (metrics.distribution) {
+        console.log(`Distribution bins: ${metrics.distribution.labels?.length || 0}`);
         distributionChart.data.labels = metrics.distribution.labels;
         distributionChart.data.datasets[0].data = metrics.distribution.counts;
-        distributionChart.update();
+        distributionChart.update('none');
     }
 
     // Update source chart
     if (metrics.source_breakdown) {
+        console.log('Updating source breakdown chart');
         sourceChart.data.datasets[0].data = [
             metrics.source_breakdown.sonic.pal,
             metrics.source_breakdown.ethereum.pal,
             metrics.source_breakdown.unknown.pal
         ];
-        sourceChart.update();
+        sourceChart.update('none');
     }
 }
 
