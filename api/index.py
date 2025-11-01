@@ -49,30 +49,64 @@ def get_metrics():
         import requests
         from collections import defaultdict
 
-        # Contract addresses
+        # Contract addresses - Sonic
         MIGRATION_CONTRACT_SONIC = "0x99fe40e501151e92f10ac13ea1c06083ee170363"
         PAL_TOKEN_SONIC = "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac"
         TREVEE_TOKEN = "0xe90fe2de4a415ad48b6dcec08ba6ae98231948ac"
         STREVEE_TOKEN = "0x3ba32287b008ddf3c5a38df272369931e3030152"
         DAO_ADDRESS = "0xe2a7de3c3190afd79c49c8e8f2fa30ca78b97dfd"  # Exclude from user metrics
         DEPLOYER_ADDRESS = "0x2cF08825066f01595705c204d8a2f403C2cb50cB"  # Deployer wallet, exclude
-        RPC_URL = "https://rpc.soniclabs.com"
+        SONIC_RPC_URL = "https://rpc.soniclabs.com"
+
+        # Contract addresses - Ethereum
+        MIGRATION_CONTRACT_ETH = "0x3bA32287B008DdF3c5a38dF272369931E3030152"
+        PAL_TOKEN_ETH = "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF"
+        ETH_RPC_URL = "https://eth.llamarpc.com"
+        ETH_START_BLOCK = 19000000  # Approximate block for PAL migration start
 
         TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
         LZ_MIGRATION_SIG = "0xc38977ae45aaee7a70eedc8ae085f4931e040352f48f62a1bb9d1712abad1c24"  # Migration initiated
         LZ_COMPLETED_SIG = "0x877c1d3e63eecac7ca6a72be1dc0076327918516b7be8192d2da3cb32f201670"  # Migration completed
 
-        # 1. Get Sonic PAL migrations (PAL transfers TO migration contract)
-        migration_topic = "0x" + MIGRATION_CONTRACT_SONIC[2:].lower().zfill(64)
+        # 1. Get Ethereum PAL migrations (PAL transfers TO migration contract on Ethereum)
+        eth_migration_topic = "0x" + MIGRATION_CONTRACT_ETH[2:].lower().zfill(64)
 
-        sonic_response = requests.post(RPC_URL, json={
+        eth_response = requests.post(ETH_RPC_URL, json={
+            "jsonrpc": "2.0",
+            "method": "eth_getLogs",
+            "params": [{
+                "fromBlock": hex(ETH_START_BLOCK),
+                "toBlock": "latest",
+                "address": PAL_TOKEN_ETH,
+                "topics": [TRANSFER_SIG, None, eth_migration_topic]
+            }],
+            "id": 1
+        }, timeout=30)
+
+        eth_logs = eth_response.json().get("result", [])
+        eth_migrators = set()
+        eth_total = 0
+        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower(), DEPLOYER_ADDRESS.lower(), MIGRATION_CONTRACT_ETH.lower()]
+
+        for log in eth_logs:
+            migrator = ("0x" + log["topics"][1][-40:]).lower()
+            if migrator in excluded_addresses:
+                continue
+            amount = int(log["data"], 16) / 10**18
+            eth_migrators.add(migrator)
+            eth_total += amount
+
+        # 2. Get Sonic PAL migrations (PAL transfers TO migration contract)
+        sonic_migration_topic = "0x" + MIGRATION_CONTRACT_SONIC[2:].lower().zfill(64)
+
+        sonic_response = requests.post(SONIC_RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_getLogs",
             "params": [{
                 "fromBlock": hex(50000000),
                 "toBlock": "latest",
                 "address": PAL_TOKEN_SONIC,
-                "topics": [TRANSFER_SIG, None, migration_topic]
+                "topics": [TRANSFER_SIG, None, sonic_migration_topic]
             }],
             "id": 1
         }, timeout=30)
@@ -80,19 +114,17 @@ def get_metrics():
         sonic_logs = sonic_response.json().get("result", [])
         sonic_migrators = set()
         sonic_total = 0
-        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower(), DEPLOYER_ADDRESS.lower()]
 
         for log in sonic_logs:
             migrator = ("0x" + log["topics"][1][-40:]).lower()
-            # Skip DAO and migration contract
             if migrator in excluded_addresses:
                 continue
             amount = int(log["data"], 16) / 10**18
             sonic_migrators.add(migrator)
             sonic_total += amount
 
-        # 2. Get completed migrations via LayerZero (use COMPLETED events, not initiation)
-        lz_response = requests.post(RPC_URL, json={
+        # 3. Get completed migrations via LayerZero on Sonic (use COMPLETED events, not initiation)
+        lz_response = requests.post(SONIC_RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_getLogs",
             "params": [{
@@ -117,16 +149,17 @@ def get_metrics():
             lz_migrators.add(migrator)
             lz_total += amount
 
-        # Combine migration data (user migrations only)
-        all_migrators = sonic_migrators | lz_migrators
-        total_pal_migrated = sonic_total + lz_total
-        # Count migrations excluding DAO
+        # Combine migration data from all chains (user migrations only)
+        all_migrators = eth_migrators | sonic_migrators | lz_migrators
+        total_pal_migrated = eth_total + sonic_total + lz_total
+        # Count migrations excluding system addresses
+        user_eth_logs = [l for l in eth_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
         user_sonic_logs = [l for l in sonic_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
         user_lz_logs = [l for l in lz_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
-        total_migrations = len(user_sonic_logs) + len(user_lz_logs)
+        total_migrations = len(user_eth_logs) + len(user_sonic_logs) + len(user_lz_logs)
 
-        # Get current block for holder calculation
-        block_response = requests.post(RPC_URL, json={
+        # Get current block for holder calculation (Sonic)
+        block_response = requests.post(SONIC_RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_blockNumber",
             "params": [],
@@ -138,7 +171,7 @@ def get_metrics():
         # Calculate TREVEE + sTREVEE holder counts
         def get_holders_with_balance(token_address):
             try:
-                logs_response = requests.post(RPC_URL, json={
+                logs_response = requests.post(SONIC_RPC_URL, json={
                     "jsonrpc": "2.0",
                     "method": "eth_getLogs",
                     "params": [{
@@ -178,7 +211,7 @@ def get_metrics():
         # Calculate circulating supply (Total - DAO - Migration Contract)
         def get_balance(address):
             padded = address[2:].zfill(64)
-            resp = requests.post(RPC_URL, json={
+            resp = requests.post(SONIC_RPC_URL, json={
                 "jsonrpc": "2.0",
                 "method": "eth_call",
                 "params": [{"to": TREVEE_TOKEN, "data": "0x70a08231" + padded}, "latest"],
@@ -187,7 +220,7 @@ def get_metrics():
             return int(resp.json().get("result", "0x0"), 16) / 10**18
 
         # Get TREVEE total supply
-        supply_resp = requests.post(RPC_URL, json={
+        supply_resp = requests.post(SONIC_RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_call",
             "params": [{"to": TREVEE_TOKEN, "data": "0x18160ddd"}, "latest"],
@@ -235,8 +268,9 @@ def get_metrics():
                 "counts": [len(user_lz_logs), 0, 0, len(user_sonic_logs)]  # Small Ethereum migrations + huge Sonic whale
             },
             "source_breakdown": {
+                "ethereum": {"pal": eth_total, "count": len(eth_migrators)},
                 "sonic": {"pal": sonic_total, "count": len(sonic_migrators)},
-                "ethereum": {"pal": lz_total, "count": len(lz_migrators)},
+                "layerzero": {"pal": lz_total, "count": len(lz_migrators)},
                 "unknown": {"pal": 0, "count": 0}
             },
             "top_migrations": [],
@@ -396,12 +430,12 @@ def get_trevee_metrics():
         # TREVEE token addresses
         TREVEE_TOKEN = "0xe90fe2de4a415ad48b6dcec08ba6ae98231948ac"
         STAKING_CONTRACT = "0x3ba32287b008ddf3c5a38df272369931e3030152"
-        RPC_URL = "https://rpc.soniclabs.com"
+        SONIC_RPC_URL = "https://rpc.soniclabs.com"
 
         # Fetch total supply from blockchain
         def make_rpc_call(method, params):
             try:
-                response = requests.post(RPC_URL, json={
+                response = requests.post(SONIC_RPC_URL, json={
                     "jsonrpc": "2.0",
                     "method": method,
                     "params": params,
@@ -438,7 +472,7 @@ def get_trevee_metrics():
                 current_block = int(make_rpc_call("eth_blockNumber", []), 16)
                 from_block = max(current_block - 3000000, 50000000)
 
-                logs_response = requests.post(RPC_URL, json={
+                logs_response = requests.post(SONIC_RPC_URL, json={
                     "jsonrpc": "2.0",
                     "method": "eth_getLogs",
                     "params": [{

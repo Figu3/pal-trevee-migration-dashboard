@@ -131,12 +131,13 @@ function initializeCharts() {
     sourceChart = new Chart(sourceCtx, {
         type: 'pie',
         data: {
-            labels: ['Sonic Native', 'Ethereum Bridge', 'Unknown'],
+            labels: ['Ethereum', 'Sonic', 'LayerZero', 'Unknown'],
             datasets: [{
-                data: [0, 0, 0],
+                data: [0, 0, 0, 0],
                 backgroundColor: [
-                    '#00d4ff',
                     '#7b61ff',
+                    '#00d4ff',
+                    '#00ff88',
                     '#6b7592'
                 ],
                 borderColor: '#1a1f3a',
@@ -244,9 +245,10 @@ function updateCharts(metrics) {
     if (metrics.source_breakdown) {
         if (DEBUG) console.log('Updating source breakdown chart');
         sourceChart.data.datasets[0].data = [
-            metrics.source_breakdown.sonic.pal,
-            metrics.source_breakdown.ethereum.pal,
-            metrics.source_breakdown.unknown.pal
+            metrics.source_breakdown.ethereum?.pal || 0,
+            metrics.source_breakdown.sonic?.pal || 0,
+            metrics.source_breakdown.layerzero?.pal || 0,
+            metrics.source_breakdown.unknown?.pal || 0
         ];
         sourceChart.update('none');
     }
