@@ -77,7 +77,7 @@ def get_metrics():
         from_block = max(current_block - 3000000, 50000000)  # Last ~3M blocks
 
         # Calculate TREVEE + sTREVEE holder counts
-        def get_holder_count(token_address):
+        def get_holders_with_balance(token_address):
             try:
                 logs_response = requests.post(RPC_URL, json={
                     "jsonrpc": "2.0",
@@ -104,13 +104,17 @@ def get_metrics():
                     if to_addr != "0x0000000000000000000000000000000000000000":
                         balances[to_addr.lower()] += amount
 
-                return sum(1 for b in balances.values() if b > 0)
+                # Return set of addresses with balance > 0
+                return set(addr for addr, bal in balances.items() if bal > 0)
             except:
-                return 0
+                return set()
 
-        trevee_holders = get_holder_count(TREVEE_TOKEN)
-        strevee_holders = get_holder_count(STREVEE_TOKEN)
-        total_unique_addresses = max(trevee_holders + strevee_holders, 50)  # Rough estimate
+        trevee_holder_set = get_holders_with_balance(TREVEE_TOKEN)
+        strevee_holder_set = get_holders_with_balance(STREVEE_TOKEN)
+
+        # Calculate unique holders (union of both sets)
+        all_holders = trevee_holder_set | strevee_holder_set
+        total_unique_addresses = len(all_holders)
 
         # Estimate migration count (43 on Ethereum based on Etherscan)
         estimated_migrations = 43
@@ -344,7 +348,7 @@ def get_trevee_metrics():
         from collections import defaultdict
         TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
-        def get_holder_count(token_address):
+        def get_holders_with_balance(token_address):
             try:
                 current_block = int(make_rpc_call("eth_blockNumber", []), 16)
                 from_block = max(current_block - 3000000, 50000000)
@@ -374,12 +378,17 @@ def get_trevee_metrics():
                     if to_addr != "0x0000000000000000000000000000000000000000":
                         balances[to_addr.lower()] += amount
 
-                return sum(1 for b in balances.values() if b > 0)
+                return set(addr for addr, bal in balances.items() if bal > 0)
             except:
-                return 0
+                return set()
 
-        trevee_holders = get_holder_count(TREVEE_TOKEN)
-        strevee_holders = get_holder_count(STAKING_CONTRACT)
+        trevee_holder_set = get_holders_with_balance(TREVEE_TOKEN)
+        strevee_holder_set = get_holders_with_balance(STAKING_CONTRACT)
+
+        all_holders = trevee_holder_set | strevee_holder_set
+        trevee_holders = len(trevee_holder_set)
+        strevee_holders = len(strevee_holder_set)
+        total_holders = len(all_holders)
 
         # Chain breakdown
         tvl_by_chain = {
@@ -388,7 +397,7 @@ def get_trevee_metrics():
                 "chain_id": 146,
                 "total_supply": total_supply,
                 "staked_amount": staked_amount,
-                "holder_count": trevee_holders + strevee_holders,
+                "holder_count": total_holders,
                 "trevee_holders": trevee_holders,
                 "strevee_holders": strevee_holders,
                 "explorer": f"https://sonicscan.org/token/{TREVEE_TOKEN}"
