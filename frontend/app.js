@@ -491,7 +491,7 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
                 <div class="chain-stat">
                     <span class="chain-stat-label">Holders:</span>
                     <span class="chain-stat-value">
-                        ${chainData.holder_count !== null && chainData.holder_count !== undefined ? formatNumber(chainData.holder_count, 0) : 'Calculating...'}
+                        ${chainData.holder_count !== null && chainData.holder_count !== undefined ? formatNumber(chainData.holder_count, 0) : (chainData.total_supply > 0 ? 'RPC Limited' : 'N/A')}
                     </span>
                 </div>
                 <div class="chain-stat">
@@ -530,7 +530,7 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
                 <div class="chain-stat">
                     <span class="chain-stat-label">Holders:</span>
                     <span class="chain-stat-value">
-                        ${chainData.holder_count ? formatNumber(chainData.holder_count, 0) : 'Coming soon'}
+                        ${chainData.holder_count !== null && chainData.holder_count !== undefined ? formatNumber(chainData.holder_count, 0) : (chainData.total_supply > 0 ? 'RPC Limited' : 'N/A')}
                     </span>
                 </div>
                 <div class="chain-stat">

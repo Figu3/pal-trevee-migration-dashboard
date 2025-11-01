@@ -518,8 +518,8 @@ def get_trevee_metrics():
         total_holders = len(all_holders)
 
         # Helper function to get TREVEE holders for a chain
-        def get_trevee_holders(rpc_url, trevee_token, start_block):
-            """Get holder count for TREVEE token on any chain"""
+        def get_trevee_holders(rpc_url, trevee_token, start_block, max_range=10000):
+            """Get holder count for TREVEE token on any chain with batching support"""
             try:
                 # Get current block
                 block_resp = requests.post(rpc_url, json={
@@ -529,38 +529,53 @@ def get_trevee_metrics():
                     "id": 1
                 }, timeout=10)
                 current_block = int(block_resp.json()["result"], 16)
-                from_block = max(current_block - 1000000, start_block)  # Last ~1M blocks
 
-                # Get all transfer events
-                logs_response = requests.post(rpc_url, json={
-                    "jsonrpc": "2.0",
-                    "method": "eth_getLogs",
-                    "params": [{
-                        "fromBlock": hex(from_block),
-                        "toBlock": "latest",
-                        "address": trevee_token,
-                        "topics": ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]
-                    }],
-                    "id": 1
-                }, timeout=30)
+                # Use smaller range for chains with limits (Plasma, Ethereum)
+                from_block = max(current_block - max_range, start_block)
 
-                logs = logs_response.json().get("result", [])
+                # Get all transfer events in batches
                 balances = defaultdict(int)
+                batch_size = 5000  # Conservative batch size
 
-                for log in logs:
-                    from_addr = "0x" + log["topics"][1][-40:]
-                    to_addr = "0x" + log["topics"][2][-40:]
-                    amount = int(log["data"], 16)
+                for batch_start in range(from_block, current_block + 1, batch_size):
+                    batch_end = min(batch_start + batch_size - 1, current_block)
 
-                    if from_addr != "0x0000000000000000000000000000000000000000":
-                        balances[from_addr.lower()] -= amount
-                    if to_addr != "0x0000000000000000000000000000000000000000":
-                        balances[to_addr.lower()] += amount
+                    logs_response = requests.post(rpc_url, json={
+                        "jsonrpc": "2.0",
+                        "method": "eth_getLogs",
+                        "params": [{
+                            "fromBlock": hex(batch_start),
+                            "toBlock": hex(batch_end),
+                            "address": trevee_token,
+                            "topics": ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]
+                        }],
+                        "id": 1
+                    }, timeout=30)
 
-                # Return set of addresses with balance > 0
-                return len(set(addr for addr, bal in balances.items() if bal > 0))
+                    result = logs_response.json()
+                    if "error" in result:
+                        print(f"Error in batch {batch_start}-{batch_end}: {result['error']}")
+                        continue
+
+                    logs = result.get("result", [])
+
+                    for log in logs:
+                        from_addr = "0x" + log["topics"][1][-40:]
+                        to_addr = "0x" + log["topics"][2][-40:]
+                        amount = int(log["data"], 16)
+
+                        if from_addr != "0x0000000000000000000000000000000000000000":
+                            balances[from_addr.lower()] -= amount
+                        if to_addr != "0x0000000000000000000000000000000000000000":
+                            balances[to_addr.lower()] += amount
+
+                # Return count of addresses with balance > 0
+                holder_count = len([addr for addr, bal in balances.items() if bal > 0])
+                return holder_count if holder_count > 0 else None
             except Exception as e:
                 print(f"Error getting holders: {e}")
+                import traceback
+                traceback.print_exc()
                 return None
 
         # Fetch Plasma metrics
@@ -579,8 +594,8 @@ def get_trevee_metrics():
         except:
             plasma_supply = None
 
-        # Get Plasma holders
-        plasma_holders = get_trevee_holders(PLASMA_RPC, PLASMA_TREVEE, 0)
+        # Get Plasma holders (limited to 10,000 block range)
+        plasma_holders = get_trevee_holders(PLASMA_RPC, PLASMA_TREVEE, 0, max_range=10000)
 
         # Fetch Ethereum metrics
         ETH_RPC = "https://eth.llamarpc.com"
@@ -601,8 +616,8 @@ def get_trevee_metrics():
         except:
             eth_trevee_supply = None
 
-        # Get Ethereum holders
-        eth_holders = get_trevee_holders(ETH_RPC, ETH_TREVEE, 19000000)
+        # Get Ethereum holders (limited to 10,000 block range due to RPC limits)
+        eth_holders = get_trevee_holders(ETH_RPC, ETH_TREVEE, 19000000, max_range=10000)
 
         # Get Ethereum PAL migration stats
         try:
