@@ -55,10 +55,12 @@ def get_metrics():
         TREVEE_TOKEN = "0xe90fe2de4a415ad48b6dcec08ba6ae98231948ac"
         STREVEE_TOKEN = "0x3ba32287b008ddf3c5a38df272369931e3030152"
         DAO_ADDRESS = "0xe2a7de3c3190afd79c49c8e8f2fa30ca78b97dfd"  # Exclude from user metrics
+        DEPLOYER_ADDRESS = "0x2cF08825066f01595705c204d8a2f403C2cb50cB"  # Deployer wallet, exclude
         RPC_URL = "https://rpc.soniclabs.com"
 
         TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-        LZ_MIGRATION_SIG = "0xc38977ae45aaee7a70eedc8ae085f4931e040352f48f62a1bb9d1712abad1c24"
+        LZ_MIGRATION_SIG = "0xc38977ae45aaee7a70eedc8ae085f4931e040352f48f62a1bb9d1712abad1c24"  # Migration initiated
+        LZ_COMPLETED_SIG = "0x877c1d3e63eecac7ca6a72be1dc0076327918516b7be8192d2da3cb32f201670"  # Migration completed
 
         # 1. Get Sonic PAL migrations (PAL transfers TO migration contract)
         migration_topic = "0x" + MIGRATION_CONTRACT_SONIC[2:].lower().zfill(64)
@@ -78,7 +80,7 @@ def get_metrics():
         sonic_logs = sonic_response.json().get("result", [])
         sonic_migrators = set()
         sonic_total = 0
-        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower()]
+        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower(), DEPLOYER_ADDRESS.lower()]
 
         for log in sonic_logs:
             migrator = ("0x" + log["topics"][1][-40:]).lower()
@@ -89,7 +91,7 @@ def get_metrics():
             sonic_migrators.add(migrator)
             sonic_total += amount
 
-        # 2. Get Ethereum migrations via LayerZero events
+        # 2. Get completed migrations via LayerZero (use COMPLETED events, not initiation)
         lz_response = requests.post(RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_getLogs",
@@ -97,7 +99,7 @@ def get_metrics():
                 "fromBlock": hex(52609535),
                 "toBlock": "latest",
                 "address": MIGRATION_CONTRACT_SONIC,
-                "topics": [LZ_MIGRATION_SIG]
+                "topics": [LZ_COMPLETED_SIG]  # Track completed, not initiated
             }],
             "id": 1
         }, timeout=30)
@@ -108,7 +110,7 @@ def get_metrics():
 
         for log in lz_logs:
             migrator = ("0x" + log["topics"][1][-40:]).lower()
-            # Skip DAO
+            # Skip DAO, deployer, migration contract
             if migrator in excluded_addresses:
                 continue
             amount = int(log["data"][2:66], 16) / 10**18
