@@ -69,7 +69,7 @@ TREVEE_CHAINS = {
     "ethereum": {
         "name": "Ethereum",
         "chain_id": 1,
-        "rpc_url": "https://eth.llamarpc.com",
+        "rpc_url": "https://eth-mainnet.g.alchemy.com/v2/ph0FUrSi6-8SvDzvJYtc1",  # Alchemy RPC for better limits
         "explorer": "https://etherscan.io",
         "pal_token": "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF",  # PAL on Ethereum (for migration tracking)
         "migration_contract": "0x3bA32287B008DdF3c5a38dF272369931E3030152",  # Ethereum migration contract

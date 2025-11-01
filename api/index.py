@@ -597,8 +597,8 @@ def get_trevee_metrics():
         # Get Plasma holders (limited to 10,000 block range)
         plasma_holders = get_trevee_holders(PLASMA_RPC, PLASMA_TREVEE, 0, max_range=10000)
 
-        # Fetch Ethereum metrics
-        ETH_RPC = "https://eth.llamarpc.com"
+        # Fetch Ethereum metrics with Alchemy RPC (better limits)
+        ETH_RPC = "https://eth-mainnet.g.alchemy.com/v2/ph0FUrSi6-8SvDzvJYtc1"
         ETH_PAL = "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF"
         ETH_TREVEE = "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac"
         ETH_MIGRATION = "0x3bA32287B008DdF3c5a38dF272369931E3030152"
@@ -616,8 +616,8 @@ def get_trevee_metrics():
         except:
             eth_trevee_supply = None
 
-        # Get Ethereum holders (limited to 10,000 block range due to RPC limits)
-        eth_holders = get_trevee_holders(ETH_RPC, ETH_TREVEE, 19000000, max_range=10000)
+        # Get Ethereum holders (Alchemy allows larger ranges - try 100K blocks)
+        eth_holders = get_trevee_holders(ETH_RPC, ETH_TREVEE, 19000000, max_range=100000)
 
         # Get Ethereum PAL migration stats
         try:
