@@ -54,6 +54,7 @@ def get_metrics():
         PAL_TOKEN_SONIC = "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac"
         TREVEE_TOKEN = "0xe90fe2de4a415ad48b6dcec08ba6ae98231948ac"
         STREVEE_TOKEN = "0x3ba32287b008ddf3c5a38df272369931e3030152"
+        DAO_ADDRESS = "0xe2a7de3c3190afd79c49c8e8f2fa30ca78b97dfd"  # Exclude from user metrics
         RPC_URL = "https://rpc.soniclabs.com"
 
         TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -77,11 +78,15 @@ def get_metrics():
         sonic_logs = sonic_response.json().get("result", [])
         sonic_migrators = set()
         sonic_total = 0
+        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower()]
 
         for log in sonic_logs:
-            migrator = "0x" + log["topics"][1][-40:]
+            migrator = ("0x" + log["topics"][1][-40:]).lower()
+            # Skip DAO and migration contract
+            if migrator in excluded_addresses:
+                continue
             amount = int(log["data"], 16) / 10**18
-            sonic_migrators.add(migrator.lower())
+            sonic_migrators.add(migrator)
             sonic_total += amount
 
         # 2. Get Ethereum migrations via LayerZero events
@@ -102,15 +107,21 @@ def get_metrics():
         lz_total = 0
 
         for log in lz_logs:
-            migrator = "0x" + log["topics"][1][-40:]
+            migrator = ("0x" + log["topics"][1][-40:]).lower()
+            # Skip DAO
+            if migrator in excluded_addresses:
+                continue
             amount = int(log["data"][2:66], 16) / 10**18
-            lz_migrators.add(migrator.lower())
+            lz_migrators.add(migrator)
             lz_total += amount
 
-        # Combine migration data
+        # Combine migration data (user migrations only)
         all_migrators = sonic_migrators | lz_migrators
         total_pal_migrated = sonic_total + lz_total
-        total_migrations = len(sonic_logs) + len(lz_logs)
+        # Count migrations excluding DAO
+        user_sonic_logs = [l for l in sonic_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
+        user_lz_logs = [l for l in lz_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
+        total_migrations = len(user_sonic_logs) + len(user_lz_logs)
 
         # Get current block for holder calculation
         block_response = requests.post(RPC_URL, json={
@@ -162,6 +173,30 @@ def get_metrics():
         all_holders = trevee_holder_set | strevee_holder_set
         total_unique_holders = len(all_holders)
 
+        # Calculate circulating supply (Total - DAO - Migration Contract)
+        def get_balance(address):
+            padded = address[2:].zfill(64)
+            resp = requests.post(RPC_URL, json={
+                "jsonrpc": "2.0",
+                "method": "eth_call",
+                "params": [{"to": TREVEE_TOKEN, "data": "0x70a08231" + padded}, "latest"],
+                "id": 1
+            }, timeout=10)
+            return int(resp.json().get("result", "0x0"), 16) / 10**18
+
+        # Get TREVEE total supply
+        supply_resp = requests.post(RPC_URL, json={
+            "jsonrpc": "2.0",
+            "method": "eth_call",
+            "params": [{"to": TREVEE_TOKEN, "data": "0x18160ddd"}, "latest"],
+            "id": 1
+        }, timeout=10)
+        total_supply = int(supply_resp.json().get("result", "0x0"), 16) / 10**18
+
+        dao_balance = get_balance(DAO_ADDRESS)
+        migration_balance = get_balance(MIGRATION_CONTRACT_SONIC)
+        circulating_supply = total_supply - dao_balance - migration_balance
+
         # Simple cumulative data (show growth to current total)
         cumulative_data = [
             {"date": "2025-10-10", "cumulative_pal": total_pal_migrated * 0.05},
@@ -180,10 +215,14 @@ def get_metrics():
 
         return jsonify({
             "summary": {
-                "total_unique_addresses": len(all_migrators),  # Migrators, not holders
-                "total_pal_migrated": total_pal_migrated,
-                "total_migrations": total_migrations,
-                "total_holders": total_unique_holders,  # Separate: current holders
+                "total_unique_addresses": len(all_migrators),  # Migrators (excluding DAO)
+                "total_pal_migrated": total_pal_migrated,  # User migrations only
+                "total_migrations": total_migrations,  # User migrations only
+                "total_holders": total_unique_holders,  # Current TREVEE/sTREVEE holders
+                "total_supply": total_supply,  # Total TREVEE supply
+                "circulating_supply": circulating_supply,  # Total - DAO - Migration contract
+                "dao_balance": dao_balance,
+                "migration_contract_balance": migration_balance,
                 "average_migration_size": total_pal_migrated / total_migrations if total_migrations > 0 else 0,
                 "median_migration_size": total_pal_migrated / total_migrations if total_migrations > 0 else 0
             },
@@ -191,7 +230,7 @@ def get_metrics():
             "daily_stats": daily_stats,
             "distribution": {
                 "labels": ['0-100K', '100K-1M', '1M-10M', '10M+'],
-                "counts": [len(lz_logs) - 1, 0, 0, 1]  # Mostly small Ethereum migrations + one huge Sonic
+                "counts": [len(user_lz_logs), 0, 0, len(user_sonic_logs)]  # Small Ethereum migrations + huge Sonic whale
             },
             "source_breakdown": {
                 "sonic": {"pal": sonic_total, "count": len(sonic_migrators)},
