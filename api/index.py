@@ -594,8 +594,8 @@ def get_trevee_metrics():
         except:
             plasma_supply = None
 
-        # Get Plasma holders (limited to 10,000 block range)
-        plasma_holders = get_trevee_holders(PLASMA_RPC, PLASMA_TREVEE, 0, max_range=10000)
+        # Get Plasma holders (scan larger range with batching - 100K blocks)
+        plasma_holders = get_trevee_holders(PLASMA_RPC, PLASMA_TREVEE, 0, max_range=100000)
 
         # Fetch Ethereum metrics with Alchemy RPC (better limits)
         ETH_RPC = "https://eth-mainnet.g.alchemy.com/v2/ph0FUrSi6-8SvDzvJYtc1"
