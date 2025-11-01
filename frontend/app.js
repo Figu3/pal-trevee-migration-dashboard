@@ -472,41 +472,77 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
         const chainEmojis = {
             'sonic': '⚡',
             'plasma': '🔷',
-            'ethereum': '💎'
+            'ethereum': '🌐'
         };
 
-        chainItem.innerHTML = `
-            <div class="chain-name">
-                <span>${chainEmojis[chainKey] || '⛓️'}</span>
-                <span>${chainData.name}</span>
-            </div>
-            <div class="chain-stat">
-                <span class="chain-stat-label">Total Supply:</span>
-                <span class="chain-stat-value">
-                    ${chainData.total_supply ? formatNumber(chainData.total_supply, 0) + ' TREVEE' : 'Not configured'}
-                </span>
-            </div>
-            <div class="chain-stat">
-                <span class="chain-stat-label">Staked Amount:</span>
-                <span class="chain-stat-value">
-                    ${chainData.staked_amount ? formatNumber(chainData.staked_amount, 0) + ' TREVEE' : 'Not configured'}
-                </span>
-            </div>
-            <div class="chain-stat">
-                <span class="chain-stat-label">Holders:</span>
-                <span class="chain-stat-value">
-                    ${chainData.holder_count ? formatNumber(chainData.holder_count, 0) : 'Coming soon'}
-                </span>
-            </div>
-            <div class="chain-stat">
-                <span class="chain-stat-label">Explorer:</span>
-                <span class="chain-stat-value">
-                    <a href="${chainData.explorer}" target="_blank" style="color: var(--accent-primary); text-decoration: none;">
-                        View →
-                    </a>
-                </span>
-            </div>
-        `;
+        // Different display for Ethereum (source chain) vs TREVEE chains
+        if (chainKey === 'ethereum') {
+            chainItem.innerHTML = `
+                <div class="chain-name">
+                    <span>${chainEmojis[chainKey] || '⛓️'}</span>
+                    <span>${chainData.name}</span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">PAL Migrated:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.pal_migrated ? formatNumber(chainData.pal_migrated, 0) + ' PAL' : '0 PAL'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Migrators:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.migrator_count ? formatNumber(chainData.migrator_count, 0) : '0'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Note:</span>
+                    <span class="chain-stat-value" style="font-size: 0.85em;">
+                        ${chainData.note || 'Migration source chain'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Explorer:</span>
+                    <span class="chain-stat-value">
+                        <a href="${chainData.explorer}" target="_blank" style="color: var(--accent-primary); text-decoration: none;">
+                            View →
+                        </a>
+                    </span>
+                </div>
+            `;
+        } else {
+            chainItem.innerHTML = `
+                <div class="chain-name">
+                    <span>${chainEmojis[chainKey] || '⛓️'}</span>
+                    <span>${chainData.name}</span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Total Supply:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.total_supply ? formatNumber(chainData.total_supply, 0) + ' TREVEE' : 'Not configured'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Staked Amount:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.staked_amount !== null && chainData.staked_amount !== undefined ? formatNumber(chainData.staked_amount, 0) + ' TREVEE' : 'No staking yet'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Holders:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.holder_count ? formatNumber(chainData.holder_count, 0) : 'Coming soon'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Explorer:</span>
+                    <span class="chain-stat-value">
+                        <a href="${chainData.explorer}" target="_blank" style="color: var(--accent-primary); text-decoration: none;">
+                            View →
+                        </a>
+                    </span>
+                </div>
+            `;
+        }
 
         chainGrid.appendChild(chainItem);
     });

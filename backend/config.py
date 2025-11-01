@@ -59,11 +59,11 @@ TREVEE_CHAINS = {
     },
     "plasma": {
         "name": "Plasma",
-        "chain_id": 9745,  # Plasma chain ID
-        "rpc_url": "https://rpc.plasmachain.io",  # TODO: Verify correct RPC
+        "chain_id": 9745,
+        "rpc_url": "https://rpc.plasma.to",  # Official Plasma RPC (rate limited)
         "explorer": "https://plasmascan.to",
-        "trevee_token": "0x0000000000000000000000000000000000000000",  # TODO: Add Trevee token address
-        "staking_contract": "0x0000000000000000000000000000000000000000",  # TODO: Add staking contract
+        "trevee_token": "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac",  # TREVEE token on Plasma
+        "staking_contract": "0x0000000000000000000000000000000000000000",  # stkTREVEE not deployed yet
         "enabled": True
     },
     "ethereum": {
@@ -71,9 +71,11 @@ TREVEE_CHAINS = {
         "chain_id": 1,
         "rpc_url": "https://eth.llamarpc.com",
         "explorer": "https://etherscan.io",
-        "trevee_token": "0x0000000000000000000000000000000000000000",  # TODO: Add Trevee token address
-        "staking_contract": "0x0000000000000000000000000000000000000000",  # TODO: Add staking contract
-        "enabled": False  # Set to True if deployed on Ethereum
+        "pal_token": "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF",  # PAL on Ethereum (for migration tracking)
+        "migration_contract": "0x3bA32287B008DdF3c5a38dF272369931E3030152",  # Ethereum migration contract
+        "trevee_token": "0x0000000000000000000000000000000000000000",  # TREVEE not on Ethereum (migrates to Sonic)
+        "staking_contract": "0x0000000000000000000000000000000000000000",
+        "enabled": True  # Track ETH→Sonic migrations
     }
 }
 

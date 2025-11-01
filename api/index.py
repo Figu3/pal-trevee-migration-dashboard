@@ -517,6 +517,47 @@ def get_trevee_metrics():
         strevee_holders = len(strevee_holder_set)
         total_holders = len(all_holders)
 
+        # Fetch Plasma metrics
+        PLASMA_RPC = "https://rpc.plasma.to"
+        PLASMA_TREVEE = "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac"
+
+        try:
+            # Get Plasma TREVEE total supply
+            plasma_supply_resp = requests.post(PLASMA_RPC, json={
+                "jsonrpc": "2.0",
+                "method": "eth_call",
+                "params": [{"to": PLASMA_TREVEE, "data": "0x18160ddd"}, "latest"],
+                "id": 1
+            }, timeout=10)
+            plasma_supply = int(plasma_supply_resp.json().get("result", "0x0"), 16) / 10**18
+        except:
+            plasma_supply = None
+
+        # Get Ethereum migration stats (PAL migrated from Ethereum)
+        ETH_RPC = "https://eth.llamarpc.com"
+        ETH_PAL = "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF"
+        ETH_MIGRATION = "0x3bA32287B008DdF3c5a38dF272369931E3030152"
+        eth_migration_topic = "0x" + ETH_MIGRATION[2:].lower().zfill(64)
+
+        try:
+            eth_migrations_resp = requests.post(ETH_RPC, json={
+                "jsonrpc": "2.0",
+                "method": "eth_getLogs",
+                "params": [{
+                    "fromBlock": "0x1200000",  # Block ~19M
+                    "toBlock": "latest",
+                    "address": ETH_PAL,
+                    "topics": ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef", None, eth_migration_topic]
+                }],
+                "id": 1
+            }, timeout=30)
+            eth_logs = eth_migrations_resp.json().get("result", [])
+            eth_pal_migrated = sum(int(log["data"], 16) / 10**18 for log in eth_logs)
+            eth_migrator_count = len(set("0x" + log["topics"][1][-40:] for log in eth_logs))
+        except:
+            eth_pal_migrated = 0
+            eth_migrator_count = 0
+
         # Chain breakdown
         tvl_by_chain = {
             "sonic": {
@@ -532,14 +573,22 @@ def get_trevee_metrics():
             "plasma": {
                 "name": "Plasma",
                 "chain_id": 9745,
-                "total_supply": None,
-                "staked_amount": None,
-                "holder_count": None,
-                "explorer": "https://plasmascan.to"
+                "total_supply": plasma_supply,
+                "staked_amount": 0,  # No staking yet
+                "holder_count": None,  # TODO: Calculate holders
+                "explorer": f"https://plasmascan.to/token/{PLASMA_TREVEE}"
+            },
+            "ethereum": {
+                "name": "Ethereum",
+                "chain_id": 1,
+                "pal_migrated": eth_pal_migrated,
+                "migrator_count": eth_migrator_count,
+                "note": "PAL migrated from Ethereum → Sonic via LayerZero",
+                "explorer": f"https://etherscan.io/token/{ETH_PAL}"
             }
         }
 
-        enabled_chains = ["sonic", "plasma"]
+        enabled_chains = ["sonic", "plasma", "ethereum"]
 
         return jsonify({
             "staking_stats": {
