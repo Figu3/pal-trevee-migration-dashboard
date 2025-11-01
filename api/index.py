@@ -517,6 +517,52 @@ def get_trevee_metrics():
         strevee_holders = len(strevee_holder_set)
         total_holders = len(all_holders)
 
+        # Helper function to get TREVEE holders for a chain
+        def get_trevee_holders(rpc_url, trevee_token, start_block):
+            """Get holder count for TREVEE token on any chain"""
+            try:
+                # Get current block
+                block_resp = requests.post(rpc_url, json={
+                    "jsonrpc": "2.0",
+                    "method": "eth_blockNumber",
+                    "params": [],
+                    "id": 1
+                }, timeout=10)
+                current_block = int(block_resp.json()["result"], 16)
+                from_block = max(current_block - 1000000, start_block)  # Last ~1M blocks
+
+                # Get all transfer events
+                logs_response = requests.post(rpc_url, json={
+                    "jsonrpc": "2.0",
+                    "method": "eth_getLogs",
+                    "params": [{
+                        "fromBlock": hex(from_block),
+                        "toBlock": "latest",
+                        "address": trevee_token,
+                        "topics": ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"]
+                    }],
+                    "id": 1
+                }, timeout=30)
+
+                logs = logs_response.json().get("result", [])
+                balances = defaultdict(int)
+
+                for log in logs:
+                    from_addr = "0x" + log["topics"][1][-40:]
+                    to_addr = "0x" + log["topics"][2][-40:]
+                    amount = int(log["data"], 16)
+
+                    if from_addr != "0x0000000000000000000000000000000000000000":
+                        balances[from_addr.lower()] -= amount
+                    if to_addr != "0x0000000000000000000000000000000000000000":
+                        balances[to_addr.lower()] += amount
+
+                # Return set of addresses with balance > 0
+                return len(set(addr for addr, bal in balances.items() if bal > 0))
+            except Exception as e:
+                print(f"Error getting holders: {e}")
+                return None
+
         # Fetch Plasma metrics
         PLASMA_RPC = "https://rpc.plasma.to"
         PLASMA_TREVEE = "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac"
@@ -533,12 +579,32 @@ def get_trevee_metrics():
         except:
             plasma_supply = None
 
-        # Get Ethereum migration stats (PAL migrated from Ethereum)
+        # Get Plasma holders
+        plasma_holders = get_trevee_holders(PLASMA_RPC, PLASMA_TREVEE, 0)
+
+        # Fetch Ethereum metrics
         ETH_RPC = "https://eth.llamarpc.com"
         ETH_PAL = "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF"
+        ETH_TREVEE = "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac"
         ETH_MIGRATION = "0x3bA32287B008DdF3c5a38dF272369931E3030152"
         eth_migration_topic = "0x" + ETH_MIGRATION[2:].lower().zfill(64)
 
+        # Get Ethereum TREVEE supply
+        try:
+            eth_supply_resp = requests.post(ETH_RPC, json={
+                "jsonrpc": "2.0",
+                "method": "eth_call",
+                "params": [{"to": ETH_TREVEE, "data": "0x18160ddd"}, "latest"],
+                "id": 1
+            }, timeout=10)
+            eth_trevee_supply = int(eth_supply_resp.json().get("result", "0x0"), 16) / 10**18
+        except:
+            eth_trevee_supply = None
+
+        # Get Ethereum holders
+        eth_holders = get_trevee_holders(ETH_RPC, ETH_TREVEE, 19000000)
+
+        # Get Ethereum PAL migration stats
         try:
             eth_migrations_resp = requests.post(ETH_RPC, json={
                 "jsonrpc": "2.0",
@@ -575,16 +641,19 @@ def get_trevee_metrics():
                 "chain_id": 9745,
                 "total_supply": plasma_supply,
                 "staked_amount": 0,  # No staking yet
-                "holder_count": None,  # TODO: Calculate holders
+                "holder_count": plasma_holders,
                 "explorer": f"https://plasmascan.to/token/{PLASMA_TREVEE}"
             },
             "ethereum": {
                 "name": "Ethereum",
                 "chain_id": 1,
+                "total_supply": eth_trevee_supply,
+                "staked_amount": 0,  # No staking yet
+                "holder_count": eth_holders,
                 "pal_migrated": eth_pal_migrated,
                 "migrator_count": eth_migrator_count,
                 "note": "PAL migrated from Ethereum → Sonic via LayerZero",
-                "explorer": f"https://etherscan.io/token/{ETH_PAL}"
+                "explorer": f"https://etherscan.io/token/{ETH_TREVEE}"
             }
         }
 

@@ -475,7 +475,7 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
             'ethereum': '🌐'
         };
 
-        // Different display for Ethereum (source chain) vs TREVEE chains
+        // All chains show TREVEE supply + holders now
         if (chainKey === 'ethereum') {
             chainItem.innerHTML = `
                 <div class="chain-name">
@@ -483,21 +483,21 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
                     <span>${chainData.name}</span>
                 </div>
                 <div class="chain-stat">
+                    <span class="chain-stat-label">TREVEE Supply:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.total_supply !== null && chainData.total_supply !== undefined ? formatNumber(chainData.total_supply, 0) + ' TREVEE' : 'Not deployed'}
+                    </span>
+                </div>
+                <div class="chain-stat">
+                    <span class="chain-stat-label">Holders:</span>
+                    <span class="chain-stat-value">
+                        ${chainData.holder_count !== null && chainData.holder_count !== undefined ? formatNumber(chainData.holder_count, 0) : 'Calculating...'}
+                    </span>
+                </div>
+                <div class="chain-stat">
                     <span class="chain-stat-label">PAL Migrated:</span>
                     <span class="chain-stat-value">
                         ${chainData.pal_migrated ? formatNumber(chainData.pal_migrated, 0) + ' PAL' : '0 PAL'}
-                    </span>
-                </div>
-                <div class="chain-stat">
-                    <span class="chain-stat-label">Migrators:</span>
-                    <span class="chain-stat-value">
-                        ${chainData.migrator_count ? formatNumber(chainData.migrator_count, 0) : '0'}
-                    </span>
-                </div>
-                <div class="chain-stat">
-                    <span class="chain-stat-label">Note:</span>
-                    <span class="chain-stat-value" style="font-size: 0.85em;">
-                        ${chainData.note || 'Migration source chain'}
                     </span>
                 </div>
                 <div class="chain-stat">

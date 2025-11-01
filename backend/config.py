@@ -73,9 +73,9 @@ TREVEE_CHAINS = {
         "explorer": "https://etherscan.io",
         "pal_token": "0xAB846Fb6C81370327e784Ae7CbB6d6a6af6Ff4BF",  # PAL on Ethereum (for migration tracking)
         "migration_contract": "0x3bA32287B008DdF3c5a38dF272369931E3030152",  # Ethereum migration contract
-        "trevee_token": "0x0000000000000000000000000000000000000000",  # TREVEE not on Ethereum (migrates to Sonic)
-        "staking_contract": "0x0000000000000000000000000000000000000000",
-        "enabled": True  # Track ETH→Sonic migrations
+        "trevee_token": "0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac",  # TREVEE token on Ethereum
+        "staking_contract": "0x0000000000000000000000000000000000000000",  # No staking yet
+        "enabled": True  # Track ETH→Sonic migrations + TREVEE supply
     }
 }
 
