@@ -528,9 +528,10 @@ function updateTreveeChainBreakdown(tvlData, enabledChains) {
                     </span>
                 </div>
                 <div class="chain-stat">
-                    <span class="chain-stat-label">${chainKey === 'plasma' ? 'Active Holders*:' : 'Holders:'}</span>
+                    <span class="chain-stat-label">Holders:</span>
                     <span class="chain-stat-value">
-                        ${chainData.holder_count !== null && chainData.holder_count !== undefined ? formatNumber(chainData.holder_count, 0) + (chainKey === 'plasma' ? ' (recent)' : '') : (chainData.total_supply > 0 ? 'RPC Limited' : 'N/A')}
+                        ${chainData.holder_count !== null && chainData.holder_count !== undefined ? formatNumber(chainData.holder_count, 0) : (chainData.total_supply > 0 ? 'RPC Limited' : 'N/A')}
+                        ${chainKey === 'plasma' ? '<a href="https://plasmascan.to/token/0xe90FE2DE4A415aD48B6DcEc08bA6ae98231948Ac" target="_blank" style="color: var(--accent-secondary); margin-left: 4px; text-decoration: none; font-size: 0.9em;">(verify →)</a>' : ''}
                     </span>
                 </div>
                 <div class="chain-stat">
