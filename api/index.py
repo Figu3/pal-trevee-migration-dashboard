@@ -65,98 +65,109 @@ def get_metrics():
         ETH_START_BLOCK = 19000000  # Approximate block for PAL migration start
 
         TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-        LZ_MIGRATION_SIG = "0xc38977ae45aaee7a70eedc8ae085f4931e040352f48f62a1bb9d1712abad1c24"  # Migration initiated
-        LZ_COMPLETED_SIG = "0x877c1d3e63eecac7ca6a72be1dc0076327918516b7be8192d2da3cb32f201670"  # Migration completed
+        ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+        zero_topic = "0x" + ZERO_ADDRESS[2:].zfill(64)
 
-        # 1. Get Ethereum PAL migrations (PAL transfers TO migration contract on Ethereum)
-        eth_migration_topic = "0x" + MIGRATION_CONTRACT_ETH[2:].lower().zfill(64)
+        # CORRECT APPROACH: Track migrations by TREVEE/stkTREVEE received, not PAL sent
+        # This captures both regular migrations and migrations with auto-stake
 
-        eth_response = requests.post(ETH_RPC_URL, json={
-            "jsonrpc": "2.0",
-            "method": "eth_getLogs",
-            "params": [{
-                "fromBlock": hex(ETH_START_BLOCK),
-                "toBlock": "latest",
-                "address": PAL_TOKEN_ETH,
-                "topics": [TRANSFER_SIG, None, eth_migration_topic]
-            }],
-            "id": 1
-        }, timeout=30)
+        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower(), DEPLOYER_ADDRESS.lower(), MIGRATION_CONTRACT_ETH.lower(), ZERO_ADDRESS]
 
-        eth_logs = eth_response.json().get("result", [])
-        eth_migrators = set()
-        eth_total = 0
-        excluded_addresses = [DAO_ADDRESS.lower(), MIGRATION_CONTRACT_SONIC.lower(), DEPLOYER_ADDRESS.lower(), MIGRATION_CONTRACT_ETH.lower()]
+        # 1. Get TREVEE transfers FROM migration contract (or minted from zero) TO users
+        migration_topic = "0x" + MIGRATION_CONTRACT_SONIC[2:].lower().zfill(64)
 
-        for log in eth_logs:
-            migrator = ("0x" + log["topics"][1][-40:]).lower()
-            if migrator in excluded_addresses:
-                continue
-            amount = int(log["data"], 16) / 10**18
-            eth_migrators.add(migrator)
-            eth_total += amount
-
-        # 2. Get Sonic PAL migrations (PAL transfers TO migration contract)
-        sonic_migration_topic = "0x" + MIGRATION_CONTRACT_SONIC[2:].lower().zfill(64)
-
-        sonic_response = requests.post(SONIC_RPC_URL, json={
+        trevee_response = requests.post(SONIC_RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_getLogs",
             "params": [{
                 "fromBlock": hex(50000000),
                 "toBlock": "latest",
-                "address": PAL_TOKEN_SONIC,
-                "topics": [TRANSFER_SIG, None, sonic_migration_topic]
+                "address": TREVEE_TOKEN,
+                "topics": [TRANSFER_SIG, migration_topic]  # FROM migration contract
             }],
             "id": 1
         }, timeout=30)
 
-        sonic_logs = sonic_response.json().get("result", [])
-        sonic_migrators = set()
-        sonic_total = 0
+        trevee_logs = trevee_response.json().get("result", [])
+        trevee_migrators = set()
+        trevee_total = 0
 
-        for log in sonic_logs:
-            migrator = ("0x" + log["topics"][1][-40:]).lower()
-            if migrator in excluded_addresses:
+        for log in trevee_logs:
+            recipient = ("0x" + log["topics"][2][-40:]).lower()
+            if recipient in excluded_addresses:
                 continue
             amount = int(log["data"], 16) / 10**18
-            sonic_migrators.add(migrator)
-            sonic_total += amount
+            trevee_migrators.add(recipient)
+            trevee_total += amount
 
-        # 3. Get completed migrations via LayerZero on Sonic (use COMPLETED events, not initiation)
-        lz_response = requests.post(SONIC_RPC_URL, json={
+        # 2. Get stkTREVEE mints (migrations with auto-stake) FROM zero address TO users
+        strevee_response = requests.post(SONIC_RPC_URL, json={
             "jsonrpc": "2.0",
             "method": "eth_getLogs",
             "params": [{
-                "fromBlock": hex(52609535),
+                "fromBlock": hex(50000000),
                 "toBlock": "latest",
-                "address": MIGRATION_CONTRACT_SONIC,
-                "topics": [LZ_COMPLETED_SIG]  # Track completed, not initiated
+                "address": STREVEE_TOKEN,
+                "topics": [TRANSFER_SIG, zero_topic]  # FROM zero address (minted)
             }],
             "id": 1
         }, timeout=30)
 
-        lz_logs = lz_response.json().get("result", [])
-        lz_migrators = set()
-        lz_total = 0
+        strevee_logs = strevee_response.json().get("result", [])
+        strevee_migrators = set()
+        strevee_total = 0
 
-        for log in lz_logs:
-            migrator = ("0x" + log["topics"][1][-40:]).lower()
-            # Skip DAO, deployer, migration contract
-            if migrator in excluded_addresses:
+        for log in strevee_logs:
+            recipient = ("0x" + log["topics"][2][-40:]).lower()
+            if recipient in excluded_addresses:
                 continue
-            amount = int(log["data"][2:66], 16) / 10**18
-            lz_migrators.add(migrator)
-            lz_total += amount
+            amount = int(log["data"], 16) / 10**18
+            strevee_migrators.add(recipient)
+            strevee_total += amount
 
-        # Combine migration data from all chains (user migrations only)
-        all_migrators = eth_migrators | sonic_migrators | lz_migrators
-        total_pal_migrated = eth_total + sonic_total + lz_total
-        # Count migrations excluding system addresses
-        user_eth_logs = [l for l in eth_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
-        user_sonic_logs = [l for l in sonic_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
-        user_lz_logs = [l for l in lz_logs if ("0x" + l["topics"][1][-40:]).lower() not in excluded_addresses]
-        total_migrations = len(user_eth_logs) + len(user_sonic_logs) + len(user_lz_logs)
+        # Combine all migrations
+        all_migrators = trevee_migrators | strevee_migrators
+        total_pal_migrated = trevee_total + strevee_total
+
+        # Filter user logs (excluding system addresses)
+        user_trevee_logs = [l for l in trevee_logs if ("0x" + l["topics"][2][-40:]).lower() not in excluded_addresses]
+        user_strevee_logs = [l for l in strevee_logs if ("0x" + l["topics"][2][-40:]).lower() not in excluded_addresses]
+        total_migrations = len(user_trevee_logs) + len(user_strevee_logs)
+
+        # For source breakdown, keep individual counts
+        eth_total = 0  # TODO: Track Ethereum migrations if they result in TREVEE on Sonic
+        sonic_total = trevee_total
+        lz_total = strevee_total
+
+        # Distribution bucketing function
+        def calculate_distribution(trevee_logs, strevee_logs):
+            """Calculate migration size distribution with buckets: 1-10k, 10k-50k, 50k-100k, 100k-500k, 500k+"""
+            buckets = {
+                '1-10k': 0,
+                '10k-50k': 0,
+                '50k-100k': 0,
+                '100k-500k': 0,
+                '500k+': 0
+            }
+
+            for log in trevee_logs + strevee_logs:
+                amount = int(log["data"], 16) / 10**18
+
+                if amount < 10000:
+                    buckets['1-10k'] += 1
+                elif amount < 50000:
+                    buckets['10k-50k'] += 1
+                elif amount < 100000:
+                    buckets['50k-100k'] += 1
+                elif amount < 500000:
+                    buckets['100k-500k'] += 1
+                else:
+                    buckets['500k+'] += 1
+
+            return {
+                "labels": list(buckets.keys()),
+                "counts": list(buckets.values())
+            }
 
         # Get current block for holder calculation (Sonic)
         block_response = requests.post(SONIC_RPC_URL, json={
@@ -263,14 +274,11 @@ def get_metrics():
             },
             "cumulative_data": cumulative_data,
             "daily_stats": daily_stats,
-            "distribution": {
-                "labels": ['0-100K', '100K-1M', '1M-10M', '10M+'],
-                "counts": [len(user_lz_logs), 0, 0, len(user_sonic_logs)]  # Small Ethereum migrations + huge Sonic whale
-            },
+            "distribution": calculate_distribution(user_trevee_logs, user_strevee_logs),
             "source_breakdown": {
-                "ethereum": {"pal": eth_total, "count": len(eth_migrators)},
-                "sonic": {"pal": sonic_total, "count": len(sonic_migrators)},
-                "layerzero": {"pal": lz_total, "count": len(lz_migrators)},
+                "ethereum": {"pal": eth_total, "count": 0},  # Reserved for future Ethereum tracking
+                "sonic": {"pal": sonic_total, "count": len(trevee_migrators)},  # TREVEE migrations
+                "layerzero": {"pal": lz_total, "count": len(strevee_migrators)},  # stkTREVEE migrations
                 "unknown": {"pal": 0, "count": 0}
             },
             "top_migrations": [],
